@@ -361,9 +361,6 @@ export const registerSchema = z.object({
 export const loginSchema = z.object({
   username: z.string().trim().min(1, "Le nom d'utilisateur est requis"),
   password: z.string().min(1, "Le mot de passe est requis"),
-  // legacy fields kept optional for admin backward compat
-  phone: phoneNumberSchema.optional(),
-  country: z.string().trim().regex(/^[A-Z]{2,3}$/, "Pays invalide").optional(),
 });
 
 export const depositSchema = z.object({

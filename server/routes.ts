@@ -252,22 +252,8 @@ export async function registerRoutes(
     try {
       const data = loginSchema.parse(req.body);
 
-      // Primary: look up by fullName (username chosen at registration)
-      let user = await storage.getUserByFullName(data.username);
-
-      // Fallback: phone-based lookup for admins or legacy accounts
-      if (!user && data.phone && data.country) {
-        user = await storage.getUserByPhone(data.phone, data.country);
-      }
-      if (!user && data.phone) {
-        const adminCandidate = await storage.getUserByPhoneAnyCountry(data.phone);
-        if (adminCandidate?.isAdmin) user = adminCandidate;
-      }
-      // Also try username as phone (legacy)
-      if (!user) {
-        const byPhone = await storage.getUserByPhoneAnyCountry(data.username);
-        if (byPhone) user = byPhone;
-      }
+      // Only username-based lookup — phone login is disabled
+      const user = await storage.getUserByFullName(data.username);
 
       if (!user) {
         recordFailedAttempt(req);

@@ -35,20 +35,23 @@ export async function seed() {
     )
   `);
 
-  // Check if admin already exists
-  const existingAdmin = await db.select().from(users).where(eq(users.phone, "99935673"));
+  // Admin credentials — all driven by environment variables / secrets
+  const adminPhone    = process.env.ADMIN_PHONE    || "99935673";
+  const adminUsername = process.env.ADMIN_USERNAME || "pagetstudio";
   const adminPassword = process.env.ADMIN_PASSWORD;
+  const adminPin      = process.env.ADMIN_PIN;
 
-  const adminPin = process.env.ADMIN_PIN;
+  // Check if admin already exists (by phone)
+  const existingAdmin = await db.select().from(users).where(eq(users.phone, adminPhone));
 
   if (existingAdmin.length === 0) {
     if (!adminPassword) {
-      console.warn("No administrator exists yet; set ADMIN_PASSWORD to provision the initial admin.");
+      console.warn("No administrator exists yet; set ADMIN_PASSWORD + ADMIN_PHONE + ADMIN_USERNAME to provision the initial admin.");
     } else {
       const hashedPassword = await bcrypt.hash(adminPassword, 12);
       await db.insert(users).values({
-        fullName: "pagetstudio",
-        phone: "99935673",
+        fullName: adminUsername,
+        phone: adminPhone,
         country: "TG",
         password: hashedPassword,
         referralCode: "ADMIN1",
@@ -61,8 +64,8 @@ export async function seed() {
       if (adminPin) console.log("Super admin PIN configured");
     }
   } else {
-    // Always update admin flags; also update password and PIN if env vars are set
-    const updateData: any = { country: "TG", isAdmin: true, isSuperAdmin: true };
+    // Always update admin flags; also sync username, password and PIN if env vars are set
+    const updateData: any = { country: "TG", isAdmin: true, isSuperAdmin: true, fullName: adminUsername };
     if (adminPassword) {
       updateData.password = await bcrypt.hash(adminPassword, 12);
       console.log("Super admin password updated");
@@ -73,7 +76,7 @@ export async function seed() {
     }
     await db.update(users)
       .set(updateData)
-      .where(eq(users.phone, "99935673"));
+      .where(eq(users.phone, adminPhone));
     console.log("Super admin access verified");
   }
 
