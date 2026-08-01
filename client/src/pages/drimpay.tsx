@@ -119,7 +119,7 @@ export default function DrimpayPage() {
   /* ── Paramètres URL ──────────────────────────────────────────────────────── */
   const params  = new URLSearchParams(window.location.search);
   const amount  = parseFloat(params.get("amount") || "0");
-  const country = user?.country || "";
+  const country = params.get("country") || user?.country || "";
 
   /* ── Données pays ──────────────────────────────────────────────────────── */
   const { data: apiCountries = [] } = useQuery<ApiCountry[]>({ queryKey: ["/api/countries"] });

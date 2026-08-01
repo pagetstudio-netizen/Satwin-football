@@ -48,11 +48,11 @@ function DepotForm({ currency, minDeposit }: { currency: string; minDeposit: num
   const [, navigate] = useLocation();
   const [method, setMethod] = useState<"xof" | "usdt">("xof");
   const [amount, setAmount] = useState<string>("");
-  const country = user?.country || "";
+  const [selectedCountry, setSelectedCountry] = useState(user?.country || "");
 
   const { data: apiCountries = [] } = useQuery<ApiCountry[]>({ queryKey: ["/api/countries"] });
-  const countryInfo = apiCountries.find(c => c.code === country) ||
-    COUNTRIES.find(c => c.code === country);
+  const allCountries = apiCountries.length > 0 ? apiCountries : COUNTRIES;
+  const countryInfo = allCountries.find((c: any) => c.code === selectedCountry);
 
   return (
     <div style={{ padding: "0 0 24px" }}>
@@ -72,6 +72,28 @@ function DepotForm({ currency, minDeposit }: { currency: string; minDeposit: num
 
       {method === "xof" ? (
         <div style={{ padding: "0 14px" }}>
+          {/* Country selector */}
+          <div style={{ marginBottom: 12, marginTop: 4 }}>
+            <div style={{ color: "#374151", fontSize: 13, fontWeight: 600, marginBottom: 6 }}>Pays</div>
+            <select
+              value={selectedCountry}
+              onChange={e => setSelectedCountry(e.target.value)}
+              style={{
+                width: "100%", boxSizing: "border-box",
+                border: "1.5px solid #d1d5db", borderRadius: 6,
+                padding: "10px 12px", fontSize: 14, color: "#111827",
+                background: "white", outline: "none", cursor: "pointer",
+              }}
+            >
+              <option value="">-- Choisir un pays --</option>
+              {(allCountries as any[]).map((c: any) => (
+                <option key={c.code} value={c.code}>
+                  {c.name} {c.currency ? `(${c.currency})` : ""}
+                </option>
+              ))}
+            </select>
+          </div>
+
           {/* Amount input */}
           <div style={{ margin: "8px 0" }}>
             <input
@@ -105,9 +127,11 @@ function DepotForm({ currency, minDeposit }: { currency: string; minDeposit: num
           <div style={{ marginTop: 8, marginBottom: 16 }}>
             <button
               onClick={() => {
+                if (!selectedCountry)
+                  return toast({ title: "Pays requis", description: "Veuillez choisir votre pays", variant: "destructive" });
                 if (!amount || Number(amount) < minDeposit)
                   return toast({ title: "Montant invalide", description: `Minimum ${minDeposit.toLocaleString()} ${currency}`, variant: "destructive" });
-                navigate(`/drimpay?amount=${Number(amount)}`);
+                navigate(`/drimpay?amount=${Number(amount)}&country=${selectedCountry}`);
               }}
               style={{
                 width: "100%", background: GREEN,
