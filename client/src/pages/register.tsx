@@ -66,7 +66,7 @@ export default function RegisterPage() {
   const [captchaCode, setCaptchaCode] = useState(genCaptcha);
 
   const params = new URLSearchParams(searchString);
-  const refCode = params.get("money") || params.get("reg") || "";
+  const refCode = params.get("invite_code") || params.get("money") || params.get("reg") || "";
 
   const form = useForm<RegisterForm>({
     resolver: zodResolver(registerSchema),

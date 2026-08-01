@@ -333,7 +333,7 @@ export default function BilletPage() {
                       fontSize: 10, color: "#888", marginTop: 5, marginBottom: 0,
                       lineHeight: 1.4,
                     }}>
-                      Pour demander une annulation, transmettez cet identifiant à l'administrateur.
+                      Pour demander une annulation, transmettez cet identifiant à notre équipe.
                     </p>
                   )}
                 </div>
