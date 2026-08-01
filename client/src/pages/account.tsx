@@ -206,7 +206,7 @@ export default function AccountPage() {
         {/* Histoire */}
         <MenuItem
           label="Histoire"
-          onClick={() => window.open("https://ad0b519b-cb61-4d1d-8db6-241e81af7474-00-1oackuvf06sni.riker.replit.dev/about", "_blank")}
+          onClick={() => navigate("/about")}
         />
 
         <div style={{ height: 1, background: "#f0f0f0", marginLeft: 16 }} />
