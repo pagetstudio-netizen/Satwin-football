@@ -1719,7 +1719,7 @@ export async function registerRoutes(
         return res.status(403).json({ message: "Acces refuse" });
       }
       
-      const adminPath = process.env.VITE_ADMIN_SECRET_PATH || "/admin-panel";
+      const adminPath = "/admin-panel";
 
       // If password is not required for this admin, auto-verify
       if (user.isAdminPasswordRequired === false) {

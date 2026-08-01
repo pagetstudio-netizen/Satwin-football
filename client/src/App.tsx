@@ -201,10 +201,10 @@ function Router() {
       {/* Admin */}
       <Route path="/admin" component={NotFound} />
       <Route path="/admin/:rest*" component={NotFound} />
-      <Route path={import.meta.env.VITE_ADMIN_SECRET_PATH || "/admin-panel"}>
+      <Route path="/admin-panel">
         <AdminRoute><AdminPage /></AdminRoute>
       </Route>
-      <Route path={`${import.meta.env.VITE_ADMIN_SECRET_PATH || "/admin-panel"}/team/:id`}>
+      <Route path="/admin-panel/team/:id">
         <AdminRoute><AdminTeamPage /></AdminRoute>
       </Route>
 
