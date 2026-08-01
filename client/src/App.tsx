@@ -201,16 +201,12 @@ function Router() {
       {/* Admin */}
       <Route path="/admin" component={NotFound} />
       <Route path="/admin/:rest*" component={NotFound} />
-      {import.meta.env.VITE_ADMIN_SECRET_PATH && (
-        <Route path={import.meta.env.VITE_ADMIN_SECRET_PATH}>
-          <AdminRoute><AdminPage /></AdminRoute>
-        </Route>
-      )}
-      {import.meta.env.VITE_ADMIN_SECRET_PATH && (
-        <Route path={`${import.meta.env.VITE_ADMIN_SECRET_PATH}/team/:id`}>
-          <AdminRoute><AdminTeamPage /></AdminRoute>
-        </Route>
-      )}
+      <Route path={import.meta.env.VITE_ADMIN_SECRET_PATH || "/admin-panel"}>
+        <AdminRoute><AdminPage /></AdminRoute>
+      </Route>
+      <Route path={`${import.meta.env.VITE_ADMIN_SECRET_PATH || "/admin-panel"}/team/:id`}>
+        <AdminRoute><AdminTeamPage /></AdminRoute>
+      </Route>
 
       {/* Banker */}
       <Route path="/banker">

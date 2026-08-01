@@ -21,20 +21,21 @@ export default function AccountPage() {
     mutationFn: async (pin: string) => {
       const res = await apiRequest("POST", "/api/admin/verify-pin", { pin });
       if (!res.ok) { const d = await res.json(); throw new Error(d.message || "Code PIN incorrect"); }
-      return res.json();
+      return res.json() as Promise<{ success: boolean; path: string }>;
     },
-    onSuccess: () => {
-      const path = import.meta.env.VITE_ADMIN_SECRET_PATH;
-      if (!path) { toast({ title: "Configuration manquante. Contactez le support.", variant: "destructive" }); return; }
-      setShowPinModal(false); setAdminPin(""); navigate(path);
+    onSuccess: (data) => {
+      setShowPinModal(false); setAdminPin(""); navigate(data.path);
     },
     onError: (e: Error) => toast({ title: e.message, variant: "destructive" }),
   });
 
-  const handleAdminClick = () => {
-    const path = import.meta.env.VITE_ADMIN_SECRET_PATH;
-    if (!path) { toast({ title: "Configuration manquante. Contactez le support.", variant: "destructive" }); return; }
-    if (user?.isAdminPasswordRequired === false) { navigate(path); return; }
+  const handleAdminClick = async () => {
+    if (user?.isAdminPasswordRequired === false) {
+      // Fetch path from server directly
+      const res = await apiRequest("POST", "/api/admin/verify-pin", { pin: "" });
+      if (res.ok) { const d = await res.json(); navigate(d.path); }
+      return;
+    }
     setShowPinModal(true);
   };
   const handleLogout = async () => { await logout(); navigate("/login"); };

@@ -211,72 +211,6 @@ export async function registerRoutes(
     })
   );
 
-  // ── Health check (public — no auth required) ─────────────────────────────
-  app.get("/api/healthz", async (_req, res) => {
-    const start = Date.now();
-    const checks: Record<string, { ok: boolean; ms?: number; detail?: string }> = {};
-
-    // 1. Database principal
-    try {
-      const t0 = Date.now();
-      await db.execute(sql`SELECT 1`);
-      checks.database = { ok: true, ms: Date.now() - t0 };
-    } catch (e: any) {
-      checks.database = { ok: false, detail: e.message };
-    }
-
-    // 2. Tables critiques
-    const tables = ["users", "transactions", "countries", "platform_settings", "session", "deposits", "withdrawal_wallets", "payment_numbers", "matches", "bets"];
-    for (const table of tables) {
-      try {
-        const t0 = Date.now();
-        await db.execute(sql.raw(`SELECT COUNT(*) FROM "${table}" LIMIT 1`));
-        checks[`table_${table}`] = { ok: true, ms: Date.now() - t0 };
-      } catch (e: any) {
-        checks[`table_${table}`] = { ok: false, detail: e.message };
-      }
-    }
-
-    // 3. Variables d'environnement critiques
-    const envVars = [
-      "SESSION_SECRET",
-      "SUPABASE_DATABASE_URL",
-      "ADMIN_PIN",
-    ];
-    const envCheck: Record<string, boolean> = {};
-    for (const v of envVars) {
-      envCheck[v] = !!process.env[v];
-    }
-    checks.env_vars = {
-      ok: Object.values(envCheck).every(Boolean),
-      detail: JSON.stringify(envCheck),
-    };
-
-    // 4. Mémoire
-    const mem = process.memoryUsage();
-    checks.memory = {
-      ok: mem.heapUsed < 400 * 1024 * 1024, // alerte si > 400 MB
-      detail: `heap ${Math.round(mem.heapUsed / 1024 / 1024)}MB / rss ${Math.round(mem.rss / 1024 / 1024)}MB`,
-    };
-
-    // 5. Uptime
-    checks.uptime = {
-      ok: true,
-      detail: `${Math.floor(process.uptime())}s`,
-    };
-
-    const allOk = Object.values(checks).every(c => c.ok);
-    const totalMs = Date.now() - start;
-
-    res.status(allOk ? 200 : 503).json({
-      status: allOk ? "ok" : "degraded",
-      totalMs,
-      node: process.version,
-      env: process.env.NODE_ENV || "development",
-      checks,
-    });
-  });
-
   // Auth routes
   app.post("/api/auth/register", async (req, res) => {
     try {
@@ -1785,9 +1719,11 @@ export async function registerRoutes(
         return res.status(403).json({ message: "Acces refuse" });
       }
       
+      const adminPath = process.env.VITE_ADMIN_SECRET_PATH || "/admin-panel";
+
       // If password is not required for this admin, auto-verify
       if (user.isAdminPasswordRequired === false) {
-        return res.json({ success: true });
+        return res.json({ success: true, path: adminPath });
       }
 
       if (!user.adminPin) {
@@ -1798,7 +1734,7 @@ export async function registerRoutes(
         return res.status(401).json({ message: "Code PIN incorrect" });
       }
       
-      res.json({ success: true });
+      res.json({ success: true, path: adminPath });
     } catch (error: any) {
       res.status(400).json({ message: error.message });
     }
