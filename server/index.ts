@@ -5,6 +5,7 @@ import { createServer } from "http";
 import { seed } from "./seed";
 import { storage } from "./storage";
 import { geoGuard } from "./geo-guard";
+import { applySecurity } from "./security";
 
 const app = express();
 const httpServer = createServer(app);
@@ -77,6 +78,9 @@ app.use((req, res, next) => {
 });
 
 (async () => {
+  // Security: headers, rate limiting, HPP, payload sanitization
+  applySecurity(app);
+
   // Security: geo-guard — block bots, VPNs, non-African IPs
   app.use(geoGuard);
 
