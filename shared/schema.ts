@@ -414,6 +414,7 @@ export const matches = pgTable("matches", {
   externalId:     text("external_id"),   // API-Football fixture ID
   liveScore:      text("live_score"),    // current score while live (e.g. "1-0 45'")
   isFeatured:     boolean("is_featured").notNull().default(false), // "match du jour"
+  isVipOnly:      boolean("is_vip_only").notNull().default(false), // Plan B exclusif
 });
 
 // ── SATWIN FOOT: Bets ────────────────────────────────────────────────────────
@@ -432,6 +433,16 @@ export type Match    = typeof matches.$inferSelect;
 export type InsertMatch = typeof matches.$inferInsert;
 export type Bet      = typeof bets.$inferSelect;
 export type InsertBet = typeof bets.$inferInsert;
+
+// ── SATWIN FOOT: Plan B (VIP exclusive) ─────────────────────────────────────
+export const planBUsers = pgTable("plan_b_users", {
+  id:       serial("id").primaryKey(),
+  userId:   integer("user_id").notNull().references(() => users.id),
+  addedAt:  timestamp("added_at").notNull().defaultNow(),
+  addedBy:  integer("added_by"),
+});
+export type PlanBUser    = typeof planBUsers.$inferSelect;
+export type InsertPlanBUser = typeof planBUsers.$inferInsert;
 
 // Types
 export type Country = typeof countries.$inferSelect;

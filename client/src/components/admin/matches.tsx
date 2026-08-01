@@ -9,8 +9,12 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { Plus, Pencil, Trash2, CheckCircle, Radio, Ban, RefreshCw, Star, StarOff } from "lucide-react";
+import {
+  Plus, Pencil, Trash2, CheckCircle, Radio, Ban, RefreshCw,
+  Star, StarOff, Users, TrendingUp, Filter,
+} from "lucide-react";
 
+/* ── Types ─────────────────────────────────────────────────────────────────── */
 interface Match {
   id: number;
   homeTeam: string;
@@ -46,6 +50,21 @@ interface MatchForm {
   status: string;
 }
 
+interface MatchStat {
+  betCount: number;
+  uniqueUsers: number;
+  totalAmount: number;
+}
+
+interface StatsResponse {
+  matchStats: Record<number, MatchStat>;
+  featuredSummary: MatchStat;
+  otherSummary: MatchStat;
+  todayFeatured: MatchStat;
+  todayOther: MatchStat;
+}
+
+/* ── Constants ─────────────────────────────────────────────────────────────── */
 const emptyForm: MatchForm = {
   homeTeam: "", awayTeam: "",
   homeFlag: "🏴", awayFlag: "🏴",
@@ -55,35 +74,87 @@ const emptyForm: MatchForm = {
 };
 
 const STATUS_BADGE: Record<string, { label: string; variant: "default" | "secondary" | "destructive" | "outline" }> = {
-  upcoming:  { label: "À venir",  variant: "secondary" },
+  upcoming:  { label: "À venir",   variant: "secondary" },
   live:      { label: "En direct", variant: "default" },
-  finished:  { label: "Terminé",  variant: "outline" },
-  cancelled: { label: "Annulé",   variant: "destructive" },
+  finished:  { label: "Terminé",   variant: "outline" },
+  cancelled: { label: "Annulé",    variant: "destructive" },
 };
 
+const STATUS_FILTERS = [
+  { key: "all",       label: "Tous" },
+  { key: "upcoming",  label: "À venir" },
+  { key: "live",      label: "En direct" },
+  { key: "finished",  label: "Terminé" },
+  { key: "cancelled", label: "Annulé" },
+];
+
+/* ── Helpers ────────────────────────────────────────────────────────────────── */
 function fmtDate(d: string) {
   if (!d) return "—";
-  return new Date(d).toLocaleString("fr-FR", { day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit" });
+  return new Date(d).toLocaleString("fr-FR", {
+    day: "2-digit", month: "2-digit", year: "2-digit",
+    hour: "2-digit", minute: "2-digit",
+  });
 }
 
+function fmtAmount(n: number) {
+  return n.toLocaleString("fr-FR") + " F";
+}
+
+/* ── Mini stat box ──────────────────────────────────────────────────────────── */
+function StatBox({ label, value, sub, color }: { label: string; value: string; sub?: string; color: string }) {
+  return (
+    <div style={{
+      flex: 1, minWidth: 120,
+      background: "#fff", borderRadius: 10,
+      padding: "12px 14px",
+      border: `2px solid ${color}22`,
+      boxShadow: "0 1px 4px rgba(0,0,0,0.06)",
+    }}>
+      <p style={{ fontSize: 11, color: "#888", marginBottom: 2 }}>{label}</p>
+      <p style={{ fontSize: 18, fontWeight: 800, color }}>{value}</p>
+      {sub && <p style={{ fontSize: 11, color: "#555", marginTop: 2 }}>{sub}</p>}
+    </div>
+  );
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   COMPONENT
+══════════════════════════════════════════════════════════════════════════════ */
 export default function AdminMatches() {
   const { toast } = useToast();
 
-  /* ── State ── */
-  const [formOpen,   setFormOpen]   = useState(false);
-  const [settleOpen, setSettleOpen] = useState(false);
-  const [editingId,  setEditingId]  = useState<number | null>(null);
-  const [settleId,   setSettleId]   = useState<number | null>(null);
-  const [form,       setForm]       = useState<MatchForm>(emptyForm);
-  const [realScore,  setRealScore]  = useState("");
-  const [syncDays,   setSyncDays]   = useState("7");
+  /* ── UI state ── */
+  const [formOpen,      setFormOpen]      = useState(false);
+  const [settleOpen,    setSettleOpen]    = useState(false);
+  const [editingId,     setEditingId]     = useState<number | null>(null);
+  const [settleId,      setSettleId]      = useState<number | null>(null);
+  const [form,          setForm]          = useState<MatchForm>(emptyForm);
+  const [realScore,     setRealScore]     = useState("");
+  const [syncDays,      setSyncDays]      = useState("7");
+
+  /* ── Filter state ── */
+  const [filterStatus,   setFilterStatus]   = useState<string>("all");
+  const [filterFeatured, setFilterFeatured] = useState<boolean>(false);
 
   /* ── Data ── */
   const { data: matchList = [], isLoading } = useQuery<Match[]>({
     queryKey: ["/api/admin/matches"],
   });
 
-  /* ── Save (create / update) ── */
+  const { data: statsData } = useQuery<StatsResponse>({
+    queryKey: ["/api/admin/matches/stats"],
+    refetchInterval: 30_000,
+  });
+
+  /* ── Filtered list ── */
+  const filteredList = matchList.filter(m => {
+    if (filterStatus !== "all" && m.status !== filterStatus) return false;
+    if (filterFeatured && !m.isFeatured) return false;
+    return true;
+  });
+
+  /* ── Mutations ── */
   const saveMutation = useMutation({
     mutationFn: async (data: MatchForm) => {
       const payload = {
@@ -92,22 +163,22 @@ export default function AdminMatches() {
         minBet: parseInt(data.minBet) || 1000,
         maxBet: parseInt(data.maxBet) || 500000,
       };
-      const url  = editingId ? `/api/admin/matches/${editingId}` : "/api/admin/matches";
+      const url    = editingId ? `/api/admin/matches/${editingId}` : "/api/admin/matches";
       const method = editingId ? "PUT" : "POST";
-      const res = await apiRequest(method, url, payload);
+      const res    = await apiRequest(method, url, payload);
       if (!res.ok) throw new Error((await res.json()).message);
       return res.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/matches"] });
       queryClient.invalidateQueries({ queryKey: ["/api/matches"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/matches/stats"] });
       toast({ title: editingId ? "Match mis à jour !" : "Match créé !" });
       closeForm();
     },
     onError: (e: any) => toast({ title: "Erreur", description: e.message, variant: "destructive" }),
   });
 
-  /* ── Settle ── */
   const settleMutation = useMutation({
     mutationFn: async () => {
       const res = await apiRequest("POST", `/api/admin/matches/${settleId}/settle`, { realScore });
@@ -117,6 +188,7 @@ export default function AdminMatches() {
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/matches"] });
       queryClient.invalidateQueries({ queryKey: ["/api/matches"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/matches/stats"] });
       toast({ title: "Match réglé !", description: data.message });
       setSettleOpen(false);
       setRealScore("");
@@ -125,22 +197,21 @@ export default function AdminMatches() {
     onError: (e: any) => toast({ title: "Erreur", description: e.message, variant: "destructive" }),
   });
 
-  /* ── Status change (live / cancel) ── */
   const statusMutation = useMutation({
-    mutationFn: async ({ id, status }: { id: number; status: string }) => {
-      const res = await apiRequest("PUT", `/api/admin/matches/${id}`, { status });
+    mutationFn: async ({ id, status, isFeatured }: { id: number; status: string; isFeatured?: boolean }) => {
+      const res = await apiRequest("PUT", `/api/admin/matches/${id}`, { status, isFeatured });
       if (!res.ok) throw new Error((await res.json()).message);
       return res.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/matches"] });
       queryClient.invalidateQueries({ queryKey: ["/api/matches"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/matches/stats"] });
       toast({ title: "Statut mis à jour" });
     },
     onError: (e: any) => toast({ title: "Erreur", description: e.message, variant: "destructive" }),
   });
 
-  /* ── API-Football Sync ── */
   const syncMutation = useMutation({
     mutationFn: async (days: number) => {
       const res = await apiRequest("POST", "/api/admin/matches/sync", { days });
@@ -155,7 +226,6 @@ export default function AdminMatches() {
     onError: (e: any) => toast({ title: "Erreur sync", description: e.message, variant: "destructive" }),
   });
 
-  /* ── Delete (deactivate) ── */
   const deleteMutation = useMutation({
     mutationFn: async (id: number) => {
       const res = await apiRequest("DELETE", `/api/admin/matches/${id}`);
@@ -171,12 +241,7 @@ export default function AdminMatches() {
   });
 
   /* ── Helpers ── */
-  function openCreate() {
-    setEditingId(null);
-    setForm(emptyForm);
-    setFormOpen(true);
-  }
-
+  function openCreate() { setEditingId(null); setForm(emptyForm); setFormOpen(true); }
   function openEdit(m: Match) {
     setEditingId(m.id);
     setForm({
@@ -189,45 +254,29 @@ export default function AdminMatches() {
     });
     setFormOpen(true);
   }
-
-  function openSettle(id: number) {
-    setSettleId(id);
-    setRealScore("");
-    setSettleOpen(true);
-  }
-
-  function closeForm() {
-    setFormOpen(false);
-    setForm(emptyForm);
-    setEditingId(null);
-  }
-
-  function set(key: keyof MatchForm, val: string) {
-    setForm(f => ({ ...f, [key]: val }));
-  }
-
+  function openSettle(id: number) { setSettleId(id); setRealScore(""); setSettleOpen(true); }
+  function closeForm() { setFormOpen(false); setForm(emptyForm); setEditingId(null); }
+  function set(key: keyof MatchForm, val: string) { setForm(f => ({ ...f, [key]: val })); }
   const sb = (m: Match) => STATUS_BADGE[m.status] ?? { label: m.status, variant: "secondary" as const };
 
-  /* ── Render ── */
+  /* ────────────────────────────────────────────────────────────────────────────
+     RENDER
+  ──────────────────────────────────────────────────────────────────────────── */
   return (
     <div className="space-y-4">
+
+      {/* ── Toolbar ─────────────────────────────────────────────────────────── */}
       <div className="flex justify-between items-center flex-wrap gap-2">
-        <h2 className="text-lg font-bold">Matchs ({matchList.length})</h2>
+        <h2 className="text-lg font-bold">Matchs ({filteredList.length}/{matchList.length})</h2>
         <div className="flex gap-2 flex-wrap">
-          {/* Sync from API-Football */}
           <div className="flex items-center gap-1">
-            <select
-              value={syncDays}
-              onChange={e => setSyncDays(e.target.value)}
-              className="text-xs border rounded px-1 py-1 h-8"
-            >
+            <select value={syncDays} onChange={e => setSyncDays(e.target.value)}
+              className="text-xs border rounded px-1 py-1 h-8">
               {[1,3,7,14].map(d => <option key={d} value={d}>{d}j</option>)}
             </select>
-            <Button
-              size="sm" variant="outline"
+            <Button size="sm" variant="outline"
               onClick={() => syncMutation.mutate(parseInt(syncDays))}
-              disabled={syncMutation.isPending}
-            >
+              disabled={syncMutation.isPending}>
               <RefreshCw className={`w-3 h-3 mr-1 ${syncMutation.isPending ? "animate-spin" : ""}`} />
               {syncMutation.isPending ? "Sync…" : "Synchroniser"}
             </Button>
@@ -238,14 +287,128 @@ export default function AdminMatches() {
         </div>
       </div>
 
+      {/* ── Today's summary stats ────────────────────────────────────────────── */}
+      {statsData && (
+        <div style={{ borderRadius: 12, background: "#F8FAFF", border: "1px solid #E0E8FF", padding: "14px 16px" }}>
+          <p style={{ fontSize: 12, fontWeight: 700, color: "#4B5563", marginBottom: 12, display: "flex", alignItems: "center", gap: 6 }}>
+            <TrendingUp size={14} /> Statistiques du jour
+          </p>
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+            {/* Match du jour */}
+            <div style={{ flex: 1, minWidth: 200, background: "#FFF8E8", borderRadius: 10, padding: "10px 14px", border: "2px solid #FBBF24" }}>
+              <p style={{ fontSize: 11, fontWeight: 700, color: "#92400E", marginBottom: 6 }}>⭐ Match du jour (aujourd'hui)</p>
+              <div style={{ display: "flex", gap: 16 }}>
+                <div>
+                  <p style={{ fontSize: 10, color: "#888" }}>Parieurs</p>
+                  <p style={{ fontSize: 20, fontWeight: 900, color: "#D97706" }}>
+                    {statsData.todayFeatured.uniqueUsers}
+                  </p>
+                </div>
+                <div>
+                  <p style={{ fontSize: 10, color: "#888" }}>Montant total</p>
+                  <p style={{ fontSize: 14, fontWeight: 800, color: "#D97706" }}>
+                    {fmtAmount(statsData.todayFeatured.totalAmount)}
+                  </p>
+                </div>
+                <div>
+                  <p style={{ fontSize: 10, color: "#888" }}>Mises</p>
+                  <p style={{ fontSize: 16, fontWeight: 700, color: "#D97706" }}>
+                    {statsData.todayFeatured.betCount}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Autres matchs */}
+            <div style={{ flex: 1, minWidth: 200, background: "#F0F7FF", borderRadius: 10, padding: "10px 14px", border: "2px solid #93C5FD" }}>
+              <p style={{ fontSize: 11, fontWeight: 700, color: "#1E40AF", marginBottom: 6 }}>🔵 Autres matchs (aujourd'hui)</p>
+              <div style={{ display: "flex", gap: 16 }}>
+                <div>
+                  <p style={{ fontSize: 10, color: "#888" }}>Parieurs</p>
+                  <p style={{ fontSize: 20, fontWeight: 900, color: "#1D4ED8" }}>
+                    {statsData.todayOther.uniqueUsers}
+                  </p>
+                </div>
+                <div>
+                  <p style={{ fontSize: 10, color: "#888" }}>Montant total</p>
+                  <p style={{ fontSize: 14, fontWeight: 800, color: "#1D4ED8" }}>
+                    {fmtAmount(statsData.todayOther.totalAmount)}
+                  </p>
+                </div>
+                <div>
+                  <p style={{ fontSize: 10, color: "#888" }}>Mises</p>
+                  <p style={{ fontSize: 16, fontWeight: 700, color: "#1D4ED8" }}>
+                    {statsData.todayOther.betCount}
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* All-time summary */}
+          <div style={{ marginTop: 10, display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <div style={{ fontSize: 11, color: "#6B7280", background: "#fff", borderRadius: 6, padding: "4px 10px", border: "1px solid #e5e7eb" }}>
+              Total match du jour (tous temps) — {statsData.featuredSummary.uniqueUsers} utilisateurs · {fmtAmount(statsData.featuredSummary.totalAmount)}
+            </div>
+            <div style={{ fontSize: 11, color: "#6B7280", background: "#fff", borderRadius: 6, padding: "4px 10px", border: "1px solid #e5e7eb" }}>
+              Total autres matchs (tous temps) — {statsData.otherSummary.uniqueUsers} utilisateurs · {fmtAmount(statsData.otherSummary.totalAmount)}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Filter bar ──────────────────────────────────────────────────────── */}
+      <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+        <Filter size={14} style={{ color: "#6B7280", flexShrink: 0 }} />
+        {STATUS_FILTERS.map(f => (
+          <button
+            key={f.key}
+            onClick={() => setFilterStatus(f.key)}
+            style={{
+              padding: "4px 12px", borderRadius: 999, fontSize: 12, fontWeight: 600,
+              cursor: "pointer", border: "1px solid",
+              background: filterStatus === f.key ? "#1D4ED8" : "#fff",
+              color:      filterStatus === f.key ? "#fff"    : "#374151",
+              borderColor: filterStatus === f.key ? "#1D4ED8" : "#D1D5DB",
+              transition: "all 0.15s",
+            }}
+          >
+            {f.label}
+          </button>
+        ))}
+        <button
+          onClick={() => setFilterFeatured(v => !v)}
+          style={{
+            padding: "4px 12px", borderRadius: 999, fontSize: 12, fontWeight: 600,
+            cursor: "pointer", border: "1px solid",
+            background: filterFeatured ? "#D97706" : "#fff",
+            color:      filterFeatured ? "#fff"    : "#374151",
+            borderColor: filterFeatured ? "#D97706" : "#D1D5DB",
+            display: "flex", alignItems: "center", gap: 4,
+            transition: "all 0.15s",
+          }}
+        >
+          <Star size={11} fill={filterFeatured ? "#fff" : "none"} />
+          Match du jour uniquement
+        </button>
+      </div>
+
+      {/* ── Match list ──────────────────────────────────────────────────────── */}
       {isLoading ? (
         <p className="text-muted-foreground text-sm">Chargement…</p>
-      ) : matchList.length === 0 ? (
-        <Card><CardContent className="py-8 text-center text-muted-foreground">Aucun match pour l'instant</CardContent></Card>
+      ) : filteredList.length === 0 ? (
+        <Card>
+          <CardContent className="py-8 text-center text-muted-foreground">
+            {matchList.length === 0 ? "Aucun match pour l'instant" : "Aucun match ne correspond aux filtres"}
+          </CardContent>
+        </Card>
       ) : (
         <div className="space-y-3">
-          {matchList.map(m => {
-            const badge = sb(m);
+          {filteredList.map(m => {
+            const badge    = sb(m);
+            const isPending = m.status !== "finished" && m.status !== "cancelled";
+            const stat     = statsData?.matchStats[m.id];
+
             return (
               <Card key={m.id} className={!m.isActive ? "opacity-50" : ""}>
                 <CardContent className="py-3 px-4">
@@ -258,7 +421,14 @@ export default function AdminMatches() {
                       </p>
                       {m.league && <p className="text-xs text-muted-foreground">{m.league}</p>}
                     </div>
-                    <Badge variant={badge.variant}>{badge.label}</Badge>
+                    <div className="flex items-center gap-2">
+                      {m.isFeatured && (
+                        <Badge style={{ background: "#FDE68A", color: "#92400E", border: "1px solid #FCD34D" }}>
+                          ⭐ Match du jour
+                        </Badge>
+                      )}
+                      <Badge variant={badge.variant}>{badge.label}</Badge>
+                    </div>
                   </div>
 
                   {/* Live score badge */}
@@ -276,19 +446,60 @@ export default function AdminMatches() {
                     <span>💰 Profit : <strong className="text-foreground">{m.profitRate}%</strong></span>
                     <span>🎰 Mise : {m.minBet.toLocaleString()}–{m.maxBet.toLocaleString()} F</span>
                     {m.externalId && <span className="col-span-2 text-[10px] opacity-50">🔗 API-ID: {m.externalId}</span>}
-                    {m.isFeatured && <span className="col-span-2 text-yellow-600 font-bold text-xs">⭐ Match du jour</span>}
-                    {m.realScore && <span className="col-span-2">⚽ Score réel : <strong className="text-foreground">{m.realScore}</strong> — {m.result === "won" ? "✅ Utilisateurs gagnent" : m.result === "refunded" ? "🔄 Remboursés (match du jour)" : "❌ Perdus"}</span>}
+                    {m.realScore && (
+                      <span className="col-span-2">
+                        ⚽ Score réel : <strong className="text-foreground">{m.realScore}</strong>
+                        {" — "}
+                        {m.result === "won"      ? "✅ Utilisateurs gagnent"
+                        : m.result === "refunded" ? "🔄 Remboursés (match du jour)"
+                        : "❌ Perdus"}
+                      </span>
+                    )}
                   </div>
 
-                  {/* Actions */}
+                  {/* ── Betting stats for this match ───────────────────────── */}
+                  {stat && (stat.betCount > 0) && (
+                    <div style={{
+                      marginTop: 10,
+                      display: "flex", gap: 8, flexWrap: "wrap",
+                      background: m.isFeatured ? "#FFFBEB" : "#F0F7FF",
+                      borderRadius: 8, padding: "8px 12px",
+                      border: `1px solid ${m.isFeatured ? "#FDE68A" : "#BFDBFE"}`,
+                    }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                        <Users size={12} style={{ color: "#6B7280" }} />
+                        <span style={{ fontSize: 12, fontWeight: 700, color: "#111" }}>
+                          {stat.uniqueUsers}
+                        </span>
+                        <span style={{ fontSize: 11, color: "#6B7280" }}>parieurs</span>
+                      </div>
+                      <span style={{ color: "#D1D5DB" }}>|</span>
+                      <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                        <TrendingUp size={12} style={{ color: "#6B7280" }} />
+                        <span style={{ fontSize: 12, fontWeight: 700, color: "#111" }}>
+                          {fmtAmount(stat.totalAmount)}
+                        </span>
+                        <span style={{ fontSize: 11, color: "#6B7280" }}>misé</span>
+                      </div>
+                      <span style={{ color: "#D1D5DB" }}>|</span>
+                      <span style={{ fontSize: 11, color: "#6B7280" }}>
+                        {stat.betCount} mise{stat.betCount > 1 ? "s" : ""}
+                      </span>
+                    </div>
+                  )}
+                  {stat && stat.betCount === 0 && (
+                    <p style={{ fontSize: 11, color: "#9CA3AF", marginTop: 6 }}>Aucun pari sur ce match</p>
+                  )}
+
+                  {/* ── Action buttons ─────────────────────────────────────── */}
                   <div className="flex flex-wrap gap-2 mt-3">
+
                     {/* Match du jour toggle */}
                     {m.status !== "finished" && m.isActive && (
                       <Button
-                        size="sm"
-                        variant="outline"
+                        size="sm" variant="outline"
                         className={m.isFeatured ? "text-yellow-600 border-yellow-400 bg-yellow-50" : "text-gray-500"}
-                        onClick={() => statusMutation.mutate({ id: m.id, status: m.status, isFeatured: !m.isFeatured } as any)}
+                        onClick={() => statusMutation.mutate({ id: m.id, status: m.status, isFeatured: !m.isFeatured })}
                       >
                         {m.isFeatured ? <StarOff className="w-3 h-3 mr-1" /> : <Star className="w-3 h-3 mr-1" />}
                         {m.isFeatured ? "Retirer du jour" : "Match du jour"}
@@ -341,7 +552,7 @@ export default function AdminMatches() {
         </div>
       )}
 
-      {/* ── Create / Edit Dialog ── */}
+      {/* ── Create / Edit Dialog ─────────────────────────────────────────────── */}
       <Dialog open={formOpen} onOpenChange={v => !v && closeForm()}>
         <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
@@ -418,14 +629,17 @@ export default function AdminMatches() {
 
           <DialogFooter>
             <Button variant="outline" onClick={closeForm}>Annuler</Button>
-            <Button onClick={() => saveMutation.mutate(form)} disabled={saveMutation.isPending || !form.homeTeam || !form.awayTeam || !form.predictedScore || !form.matchDate}>
+            <Button
+              onClick={() => saveMutation.mutate(form)}
+              disabled={saveMutation.isPending || !form.homeTeam || !form.awayTeam || !form.predictedScore || !form.matchDate}
+            >
               {saveMutation.isPending ? "Enregistrement…" : editingId ? "Mettre à jour" : "Créer"}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* ── Settle Dialog ── */}
+      {/* ── Settle Dialog ────────────────────────────────────────────────────── */}
       <Dialog open={settleOpen} onOpenChange={v => !v && (setSettleOpen(false), setRealScore(""), setSettleId(null))}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
@@ -451,7 +665,9 @@ export default function AdminMatches() {
           </div>
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => { setSettleOpen(false); setRealScore(""); setSettleId(null); }}>Annuler</Button>
+            <Button variant="outline" onClick={() => { setSettleOpen(false); setRealScore(""); setSettleId(null); }}>
+              Annuler
+            </Button>
             <Button
               onClick={() => settleMutation.mutate()}
               disabled={settleMutation.isPending || !realScore.trim()}

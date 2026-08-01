@@ -241,5 +241,21 @@ export async function seed() {
     console.log(`Staking products skipped — ${existingStakingProducts.length} existing staking products preserved`);
   }
 
+  // ── Plan B / VIP migrations ─────────────────────────────────────────────────
+  await db.execute(sql`
+    ALTER TABLE matches ADD COLUMN IF NOT EXISTS is_vip_only boolean NOT NULL DEFAULT false
+  `);
+  await db.execute(sql`
+    CREATE TABLE IF NOT EXISTS plan_b_users (
+      id        serial PRIMARY KEY,
+      user_id   integer NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      added_at  timestamp NOT NULL DEFAULT now(),
+      added_by  integer
+    )
+  `);
+  await db.execute(sql`
+    CREATE UNIQUE INDEX IF NOT EXISTS plan_b_users_user_id_key ON plan_b_users(user_id)
+  `);
+
   console.log("Database seeding complete!");
 }

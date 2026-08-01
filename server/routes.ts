@@ -3,7 +3,7 @@ import { createServer, type Server } from "http";
 import session from "express-session";
 import { storage } from "./storage";
 import bcrypt from "bcrypt";
-import { registerSchema, loginSchema, depositSchema, walletSchema, phoneNumberSchema, matches, bets } from "@shared/schema";
+import { registerSchema, loginSchema, depositSchema, walletSchema, phoneNumberSchema, matches, bets, planBUsers } from "@shared/schema";
 import { db } from "./db";
 import { eq as eqOp, and as andOp, asc as ascOp, desc as descOp } from "drizzle-orm";
 import { z } from "zod";
@@ -1785,6 +1785,83 @@ export async function registerRoutes(
     }
   });
 
+  // ═══════════════════════════════════════════════════════
+  // PLAN B — VIP exclusive list
+  // ═══════════════════════════════════════════════════════
+
+  /** List all Plan B members (with user info) */
+  app.get("/api/admin/plan-b/users", requireAdmin, async (req, res) => {
+    try {
+      const rows = await db.execute(
+        // @ts-ignore
+        `SELECT pb.id, pb.user_id, pb.added_at, pb.added_by,
+                u.full_name, u.phone, u.country, u.balance, u.referral_code
+         FROM plan_b_users pb
+         JOIN users u ON u.id = pb.user_id
+         ORDER BY pb.added_at DESC`
+      );
+      res.json(rows.rows);
+    } catch (e: any) {
+      res.status(500).json({ message: e.message });
+    }
+  });
+
+  /** Add user to Plan B by userId */
+  app.post("/api/admin/plan-b/users", requireAdmin, async (req, res) => {
+    try {
+      const { userId } = req.body;
+      if (!userId) return res.status(400).json({ message: "userId requis" });
+      const uid = parseInt(userId);
+      const [existing] = await db.select().from(planBUsers).where(eqOp(planBUsers.userId, uid));
+      if (existing) return res.status(409).json({ message: "Utilisateur déjà dans le Plan B" });
+      const [entry] = await db.insert(planBUsers).values({ userId: uid, addedBy: req.session.userId }).returning();
+      await storage.logAdminAction(req.session.userId!, "plan_b_add", uid, `Utilisateur ${uid} ajouté au Plan B`);
+      res.json(entry);
+    } catch (e: any) {
+      res.status(500).json({ message: e.message });
+    }
+  });
+
+  /** Remove user from Plan B */
+  app.delete("/api/admin/plan-b/users/:userId", requireAdmin, async (req, res) => {
+    try {
+      const uid = parseInt(req.params.userId);
+      await db.delete(planBUsers).where(eqOp(planBUsers.userId, uid));
+      await storage.logAdminAction(req.session.userId!, "plan_b_remove", uid, `Utilisateur ${uid} retiré du Plan B`);
+      res.json({ message: "Utilisateur retiré du Plan B" });
+    } catch (e: any) {
+      res.status(500).json({ message: e.message });
+    }
+  });
+
+  /** Toggle isVipOnly on a match */
+  app.post("/api/admin/plan-b/matches/:id/toggle-vip", requireAdmin, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const [match] = await db.select().from(matches).where(eqOp(matches.id, id));
+      if (!match) return res.status(404).json({ message: "Match introuvable" });
+      const newVal = !(match as any).isVipOnly;
+      await db.update(matches).set({ isVipOnly: newVal } as any).where(eqOp(matches.id, id));
+      await storage.logAdminAction(req.session.userId!, "plan_b_match_toggle", null,
+        `Match ${id} isVipOnly → ${newVal}`);
+      res.json({ id, isVipOnly: newVal });
+    } catch (e: any) {
+      res.status(500).json({ message: e.message });
+    }
+  });
+
+  /** List matches eligible for Plan B (active, not finished) */
+  app.get("/api/admin/plan-b/matches", requireAdmin, async (req, res) => {
+    try {
+      const rows = await db.select().from(matches)
+        .where(eqOp(matches.isActive, true))
+        .orderBy(descOp(matches.matchDate));
+      res.json(rows);
+    } catch (e: any) {
+      res.status(500).json({ message: e.message });
+    }
+  });
+
   app.get("/api/admin/users/:id/team", requireAdmin, async (req, res) => {
     try {
       const userId = parseInt(req.params.id);
@@ -2334,8 +2411,6 @@ export async function registerRoutes(
 
   app.get("/api/matches", async (req, res) => {
     try {
-      // Use Drizzle ORM so columns come back camelCase (homeTeam, matchDate…)
-      // Filter: active, not finished/cancelled, match_date within last 3 hours
       const { sql: rawSql } = await import("drizzle-orm");
       const cutoff = new Date(Date.now() - 3 * 60 * 60 * 1000);
       const rows = await db.select().from(matches)
@@ -2347,7 +2422,28 @@ export async function registerRoutes(
           )
         )
         .orderBy(ascOp(matches.matchDate));
-      res.json(rows);
+
+      // Filter VIP-only matches: only show to Plan B members
+      const userId = req.session?.userId;
+      let isPlanB = false;
+      if (userId) {
+        const [planBEntry] = await db.select().from(planBUsers).where(eqOp(planBUsers.userId, userId));
+        isPlanB = !!planBEntry;
+      }
+
+      const filtered = rows.filter((m: any) => !m.isVipOnly || isPlanB);
+      res.json(filtered);
+    } catch (e: any) {
+      res.status(500).json({ message: e.message });
+    }
+  });
+
+  // Check current user's Plan B status
+  app.get("/api/user/plan-b-status", requireAuth, async (req, res) => {
+    try {
+      const userId = req.session.userId!;
+      const [entry] = await db.select().from(planBUsers).where(eqOp(planBUsers.userId, userId));
+      res.json({ isPlanB: !!entry });
     } catch (e: any) {
       res.status(500).json({ message: e.message });
     }
@@ -2371,6 +2467,12 @@ export async function registerRoutes(
       if (match.status === "finished" || match.status === "cancelled") return res.status(400).json({ message: "Ce match est terminé" });
       if (betAmount < match.minBet) return res.status(400).json({ message: `Mise minimale: ${match.minBet} F` });
       if (betAmount > match.maxBet) return res.status(400).json({ message: `Mise maximale: ${match.maxBet} F` });
+
+      // Plan B check: VIP-only matches require user to be in plan_b_users
+      if ((match as any).isVipOnly) {
+        const [planBEntry] = await db.select().from(planBUsers).where(eqOp(planBUsers.userId, userId));
+        if (!planBEntry) return res.status(403).json({ message: "Ce match est réservé aux membres du Plan B." });
+      }
 
       const user = await storage.getUser(userId);
       if (!user) return res.status(404).json({ message: "Utilisateur introuvable" });
@@ -2427,6 +2529,76 @@ export async function registerRoutes(
     try {
       const all = await db.select().from(matches).orderBy(descOp(matches.matchDate));
       res.json(all);
+    } catch (e: any) {
+      res.status(500).json({ message: e.message });
+    }
+  });
+
+  /* ── Match betting statistics (per match + summary) ────────────────────── */
+  app.get("/api/admin/matches/stats", requireAdmin, async (req, res) => {
+    try {
+      const { sql: rawSql } = await import("drizzle-orm");
+
+      // Per-match aggregates
+      const rows = await db.execute(rawSql`
+        SELECT
+          b.match_id                                    AS "matchId",
+          COUNT(b.id)::int                              AS "betCount",
+          COUNT(DISTINCT b.user_id)::int                AS "uniqueUsers",
+          COALESCE(SUM(b.amount::numeric), 0)::numeric  AS "totalAmount"
+        FROM bets b
+        GROUP BY b.match_id
+      `);
+
+      const matchStats: Record<number, { betCount: number; uniqueUsers: number; totalAmount: number }> = {};
+      for (const r of rows.rows as any[]) {
+        matchStats[Number(r.matchId)] = {
+          betCount:    Number(r.betCount),
+          uniqueUsers: Number(r.uniqueUsers),
+          totalAmount: Number(r.totalAmount),
+        };
+      }
+
+      // Featured match IDs (match du jour)
+      const featuredMatches = await db
+        .select({ id: matches.id })
+        .from(matches)
+        .where(rawSql`${matches.isFeatured} = true`);
+      const featuredIds = new Set(featuredMatches.map(m => m.id));
+
+      // Summary: featured vs others
+      const featuredSummary = { betCount: 0, uniqueUsers: 0, totalAmount: 0 };
+      const otherSummary    = { betCount: 0, uniqueUsers: 0, totalAmount: 0 };
+
+      for (const [matchId, s] of Object.entries(matchStats)) {
+        const target = featuredIds.has(Number(matchId)) ? featuredSummary : otherSummary;
+        target.betCount    += s.betCount;
+        target.uniqueUsers += s.uniqueUsers;
+        target.totalAmount += s.totalAmount;
+      }
+
+      // Today's date range summary (bets placed today regardless of match)
+      const todayRows = await db.execute(rawSql`
+        SELECT
+          m.is_featured                                                    AS "isFeatured",
+          COUNT(b.id)::int                                                 AS "betCount",
+          COUNT(DISTINCT b.user_id)::int                                   AS "uniqueUsers",
+          COALESCE(SUM(b.amount::numeric), 0)::numeric                     AS "totalAmount"
+        FROM bets b
+        JOIN matches m ON m.id = b.match_id
+        WHERE b.placed_at >= CURRENT_DATE AND b.placed_at < CURRENT_DATE + INTERVAL '1 day'
+        GROUP BY m.is_featured
+      `);
+      const todayFeatured = { betCount: 0, uniqueUsers: 0, totalAmount: 0 };
+      const todayOther    = { betCount: 0, uniqueUsers: 0, totalAmount: 0 };
+      for (const r of todayRows.rows as any[]) {
+        const target = r.isFeatured ? todayFeatured : todayOther;
+        target.betCount    = Number(r.betCount);
+        target.uniqueUsers = Number(r.uniqueUsers);
+        target.totalAmount = Number(r.totalAmount);
+      }
+
+      res.json({ matchStats, featuredSummary, otherSummary, todayFeatured, todayOther });
     } catch (e: any) {
       res.status(500).json({ message: e.message });
     }
@@ -2547,15 +2719,20 @@ export async function registerRoutes(
       // ── PARIS RENVERSÉ ──────────────────────────────────────────────────────
       // Score réel ≠ score prédit  → utilisateurs GAGNENT (mise + profit)
       // Score réel = score prédit  → plateforme gagne :
+      //   • match Plan B (isVipOnly) → PERTE SÈCHE (pas de remboursement)
       //   • match du jour (isFeatured) → REMBOURSEMENT (mise seule)
       //   • match ordinaire            → PERTE (rien)
       const scored = realScore.trim() === match.predictedScore.trim();
-      // @ts-ignore isFeatured added via ALTER TABLE
+      // @ts-ignore columns added via ALTER TABLE
       const isFeatured = (match as any).isFeatured ?? false;
+      // @ts-ignore
+      const isVipOnly  = (match as any).isVipOnly  ?? false;
 
       let matchResult: string;
       if (!scored) {
         matchResult = "won";         // real ≠ predicted → users win
+      } else if (isVipOnly) {
+        matchResult = "lost";        // Plan B match → no refund ever
       } else if (isFeatured) {
         matchResult = "refunded";    // real = predicted + featured → refund
       } else {

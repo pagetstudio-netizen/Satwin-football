@@ -6,7 +6,6 @@ import { useToast } from "@/hooks/use-toast";
 import { useLocation, useSearch } from "wouter";
 import { ChevronRight, Loader2, Info } from "lucide-react";
 import { COUNTRIES, type ApiCountry } from "@/lib/countries";
-import type { PaymentNumber } from "@shared/schema";
 
 /* ── constants ── */
 const GREEN = "#15803d";
@@ -44,62 +43,16 @@ function QuickBtn({ val, selected, onSelect }: { val: number; selected: boolean;
 
 /* ════════════════ DEPOT FORM ════════════════ */
 function DepotForm({ currency, minDeposit }: { currency: string; minDeposit: number }) {
-  const { user, refreshUser } = useAuth();
+  const { user } = useAuth();
   const { toast } = useToast();
-  const qc = useQueryClient();
+  const [, navigate] = useLocation();
   const [method, setMethod] = useState<"xof" | "usdt">("xof");
   const [amount, setAmount] = useState<string>("");
-  const [senderPhone, setSenderPhone] = useState("");
-  const [trueName, setTrueName]       = useState(user?.fullName || "");
-  const [email, setEmail]             = useState("");
-  const [selectedNum, setSelectedNum] = useState<PaymentNumber | null>(null);
-  const [showBank, setShowBank]       = useState(false);
   const country = user?.country || "";
 
   const { data: apiCountries = [] } = useQuery<ApiCountry[]>({ queryKey: ["/api/countries"] });
   const countryInfo = apiCountries.find(c => c.code === country) ||
     COUNTRIES.find(c => c.code === country);
-  const phonePrefix = (countryInfo as any)?.phonePrefix || "225";
-
-  const { data: payNums = [], isLoading: numsLoading } = useQuery<PaymentNumber[]>({
-    queryKey: ["/api/payment-numbers", country],
-    queryFn: async () => {
-      const r = await fetch(`/api/payment-numbers?country=${country}`, { credentials: "include" });
-      if (!r.ok) throw new Error("Erreur");
-      return r.json();
-    },
-    enabled: !!country,
-  });
-
-  useEffect(() => {
-    if (!selectedNum && payNums.length > 0) setSelectedNum(payNums[0]);
-  }, [payNums]);
-
-  const depositMut = useMutation({
-    mutationFn: async () => {
-      if (!selectedNum) throw new Error("Aucune banque sélectionnée");
-      const r = await apiRequest("POST", "/api/deposits", {
-        amount: Number(amount), accountName: trueName || user?.fullName || "",
-        accountNumber: senderPhone, paymentMethod: selectedNum.operatorName,
-        country, paymentNumberId: selectedNum.id,
-        channelName: `${selectedNum.operatorName} - ${selectedNum.phone}`,
-      });
-      return r.json();
-    },
-    onSuccess: () => {
-      toast({ title: "Dépôt soumis !", description: "Votre demande est en cours de traitement." });
-      refreshUser();
-      qc.invalidateQueries({ queryKey: ["/api/deposits/history"] });
-      setAmount("");
-    },
-    onError: (e: Error) => toast({ title: "Erreur", description: e.message, variant: "destructive" }),
-  });
-
-  const handleSubmit = () => {
-    if (!amount || Number(amount) < minDeposit)
-      return toast({ title: "Montant invalide", description: `Minimum ${minDeposit.toLocaleString()} ${currency}`, variant: "destructive" });
-    depositMut.mutate();
-  };
 
   return (
     <div style={{ padding: "0 0 24px" }}>
@@ -148,64 +101,23 @@ function DepotForm({ currency, minDeposit }: { currency: string; minDeposit: num
             </span>
           </div>
 
-          {/* Bank selector */}
-          <div style={{ borderBottom: "1px solid #f3f4f6" }}>
-            <button onClick={() => setShowBank(!showBank)} style={{
-              width: "100%", background: "none", border: "none", cursor: "pointer",
-              display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 0",
-            }}>
-              <span style={{ color: "#6b7280", fontSize: 13 }}>Choisissez votre banque</span>
-              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                <span style={{ fontWeight: 700, fontSize: 13, color: "#111827" }}>
-                  {selectedNum ? `${selectedNum.operatorName}` : "—"}
-                </span>
-                <ChevronRight size={15} color="#9ca3af" />
-              </div>
-            </button>
-            {showBank && (
-              <div style={{ paddingBottom: 8 }}>
-                {numsLoading ? <div style={{ textAlign: "center", padding: 12 }}><Loader2 size={18} className="animate-spin" /></div> :
-                  payNums.length === 0 ? <p style={{ color: "#9ca3af", fontSize: 13, padding: "8px 0" }}>Aucun numéro disponible</p> :
-                  payNums.map(n => (
-                    <button key={n.id} onClick={() => { setSelectedNum(n); setShowBank(false); }} style={{
-                      width: "100%", textAlign: "left", background: selectedNum?.id === n.id ? "rgba(21,128,61,0.07)" : "none",
-                      border: "none", borderRadius: 6, padding: "8px 12px", cursor: "pointer",
-                      fontSize: 13, color: "#111827",
-                    }}>
-                      {n.operatorName} — {n.phone}
-                    </button>
-                  ))
-                }
-              </div>
-            )}
-          </div>
-
-          {/* Phone */}
-          <div style={{ borderBottom: "1px solid #f3f4f6", padding: "12px 0" }}>
-            <span style={{ color: "#6b7280", fontSize: 13, display: "block", marginBottom: 8 }}>Numéro de téléphone portable</span>
-            <div style={{ display: "flex", gap: 8 }}>
-              <div style={{ border: "1px solid #d1d5db", borderRadius: 6, padding: "8px 12px", fontSize: 14, color: "#374151", minWidth: 72, textAlign: "center" }}>
-                {phonePrefix} ↓
-              </div>
-              <input type="tel" value={senderPhone} onChange={e => setSenderPhone(e.target.value)}
-                placeholder="Numéro" style={{
-                  flex: 1, border: "1px solid #d1d5db", borderRadius: 6, padding: "8px 12px",
-                  fontSize: 14, outline: "none",
-                }} />
-            </div>
-          </div>
-
-          {/* Effectuer le paiement */}
+          {/* Procéder au paiement → Drimpay */}
           <div style={{ marginTop: 8, marginBottom: 16 }}>
-          <button onClick={handleSubmit} disabled={depositMut.isPending} style={{
-            width: "100%", background: GREEN,
-            color: "white", border: "none", borderRadius: 10,
-            padding: "16px", fontWeight: 800, fontSize: 16, cursor: "pointer",
-            opacity: depositMut.isPending ? 0.7 : 1,
-            letterSpacing: 0.5,
-          }}>
-            {depositMut.isPending ? "En cours..." : "Effectuer le paiement"}
-          </button>
+            <button
+              onClick={() => {
+                if (!amount || Number(amount) < minDeposit)
+                  return toast({ title: "Montant invalide", description: `Minimum ${minDeposit.toLocaleString()} ${currency}`, variant: "destructive" });
+                navigate(`/drimpay?amount=${Number(amount)}`);
+              }}
+              style={{
+                width: "100%", background: GREEN,
+                color: "white", border: "none", borderRadius: 10,
+                padding: "16px", fontWeight: 800, fontSize: 16, cursor: "pointer",
+                letterSpacing: 0.5,
+              }}
+            >
+              Procéder au paiement
+            </button>
           </div>
         </div>
       ) : (

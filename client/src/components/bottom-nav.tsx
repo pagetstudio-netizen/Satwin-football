@@ -20,7 +20,7 @@ interface NavItem {
 
 const leftItems: NavItem[] = [
   { path: "/",      label: "Accueil", icon: "/icon-home.png",  invertFirst: true },
-  { path: "/match", label: "Matchs",  icon: "/icon-match.png", invertFirst: false },
+  { path: "/match", label: "Évènements", icon: "/icon-calendar.png", invertFirst: false },
 ];
 const rightItems: NavItem[] = [
   { path: "/team",    label: "Équipe",  icon: "/icon-equipe.png", invertFirst: false },
@@ -48,8 +48,8 @@ function NavIcon({ item, active }: { item: NavItem; active: boolean }) {
       src={item.icon}
       alt={item.label}
       style={{
-        width: 24,
-        height: 24,
+        width: 30,
+        height: 30,
         objectFit: "contain",
         filter: base + colour,
         transition: "filter 0.15s",

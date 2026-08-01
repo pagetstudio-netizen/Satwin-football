@@ -14,6 +14,7 @@ import AdminSettings from "@/components/admin/settings";
 import AdminGiftCodes from "@/components/admin/gift-codes";
 import AdminCountries from "@/components/admin/countries";
 import AdminMatches from "@/components/admin/matches";
+import AdminPlanB from "@/components/admin/plan-b";
 
 export default function AdminPage() {
   const { user } = useAuth();
@@ -44,6 +45,7 @@ export default function AdminPage() {
               <TabsTrigger value="countries" data-testid="tab-countries">Pays</TabsTrigger>
               <TabsTrigger value="giftcodes" data-testid="tab-giftcodes">Codes Cadeaux</TabsTrigger>
               <TabsTrigger value="matches" data-testid="tab-matches">Matchs</TabsTrigger>
+              <TabsTrigger value="plan-b" data-testid="tab-plan-b">Plan B 👑</TabsTrigger>
               <TabsTrigger value="settings" data-testid="tab-settings">Parametres</TabsTrigger>
             </TabsList>
           </div>
@@ -82,6 +84,10 @@ export default function AdminPage() {
 
           <TabsContent value="matches" className="mt-4">
             <AdminMatches />
+          </TabsContent>
+
+          <TabsContent value="plan-b" className="mt-4">
+            <AdminPlanB />
           </TabsContent>
 
           <TabsContent value="settings" className="mt-4">

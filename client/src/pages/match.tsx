@@ -22,6 +22,8 @@ interface Match {
   realScore?: string;
   result?: string;
   liveScore?: string | null;
+  isVipOnly?: boolean;
+  isFeatured?: boolean;
 }
 
 interface ScoreOption {
