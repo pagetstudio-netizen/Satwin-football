@@ -8,7 +8,7 @@ interface LinksSettings {
   supportLink: string; support2Link: string; channelLink: string; groupLink: string;
   supportType: string; support2Type: string; channelType: string; groupType: string;
   supportLabel: string; support2Label: string; channelLabel: string; groupLabel: string;
-  supportEnabled: string; support2Enabled: string; channelEnabled: string; groupEnabled: string;
+  supportEnabled: boolean; support2Enabled: boolean; channelEnabled: boolean; groupEnabled: boolean;
   withdrawalStartHour: string; withdrawalEndHour: string;
 }
 
@@ -23,25 +23,25 @@ export default function ServicePage() {
     {
       label: settings?.supportLabel   || "Service client",
       href:  settings?.supportLink    || "https://t.me/doosangroup",
-      enabled: settings?.supportEnabled  !== "false",
+      enabled: settings?.supportEnabled  === true,
       testId: "button-support-link",
     },
     {
       label: settings?.support2Label  || "Service client 2",
       href:  settings?.support2Link   || "https://t.me/doosangroup",
-      enabled: settings?.support2Enabled !== "false",
+      enabled: settings?.support2Enabled === true,
       testId: "button-support2-link",
     },
     {
       label: settings?.channelLabel   || "Chaîne officielle",
       href:  settings?.channelLink    || "https://t.me/doosangroup",
-      enabled: settings?.channelEnabled  !== "false",
+      enabled: settings?.channelEnabled  === true,
       testId: "button-channel-link",
     },
     {
       label: settings?.groupLabel     || "Groupe de discussion",
       href:  settings?.groupLink      || "https://t.me/doosangroup",
-      enabled: settings?.groupEnabled    !== "false",
+      enabled: settings?.groupEnabled    === true,
       testId: "button-group-link",
     },
   ];

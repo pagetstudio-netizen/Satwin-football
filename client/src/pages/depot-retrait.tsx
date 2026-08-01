@@ -51,8 +51,7 @@ function DepotForm({ currency, minDeposit }: { currency: string; minDeposit: num
   const [selectedCountry, setSelectedCountry] = useState(user?.country || "");
 
   const { data: apiCountries = [] } = useQuery<ApiCountry[]>({ queryKey: ["/api/countries"] });
-  const allCountries = apiCountries.length > 0 ? apiCountries : COUNTRIES;
-  const countryInfo = allCountries.find((c: any) => c.code === selectedCountry);
+  const countryInfo = apiCountries.find((c: any) => c.code === selectedCountry);
 
   return (
     <div style={{ padding: "0 0 24px" }}>
@@ -86,7 +85,7 @@ function DepotForm({ currency, minDeposit }: { currency: string; minDeposit: num
               }}
             >
               <option value="">-- Choisir un pays --</option>
-              {(allCountries as any[]).map((c: any) => (
+              {apiCountries.map((c: any) => (
                 <option key={c.code} value={c.code}>
                   {c.name} {c.currency ? `(${c.currency})` : ""}
                 </option>

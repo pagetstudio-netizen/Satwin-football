@@ -1552,6 +1552,10 @@ export async function registerRoutes(
         support2Label: settings.support2Label || "Service client 2",
         channelLabel: settings.channelLabel || "Chaîne officielle",
         groupLabel: settings.groupLabel || "Groupe de discussion",
+        supportEnabled: settings.supportEnabled !== "false",
+        support2Enabled: settings.support2Enabled !== "false",
+        channelEnabled: settings.channelEnabled !== "false",
+        groupEnabled: settings.groupEnabled !== "false",
         withdrawalStartHour: settings.withdrawalStartHour || "9",
         withdrawalEndHour: settings.withdrawalEndHour || "17",
       });
