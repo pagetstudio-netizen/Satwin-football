@@ -1,10 +1,10 @@
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { useAuth } from "@/lib/auth";
 import { getCountryByCode } from "@/lib/countries";
-import { Home, User } from "lucide-react";
-import { apiRequest } from "@/lib/queryClient";
+import { Home, User, Copy, Check } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useState as useLocalState } from "react";
 
 interface BetWithMatch {
   bet: {
@@ -85,7 +85,7 @@ export default function BilletPage() {
   const { user } = useAuth();
   const [, navigate] = useLocation();
   const { toast } = useToast();
-  const queryClient = useQueryClient();
+  const [copiedId, setCopiedId] = useLocalState<number | null>(null);
 
   const country  = getCountryByCode(user?.country || "");
   const currency = country?.currency || "XOF";
@@ -94,17 +94,21 @@ export default function BilletPage() {
 
   const { data: bets = [], isLoading } = useQuery<BetWithMatch[]>({ queryKey: ["/api/bets"] });
 
-  const cancelMutation = useMutation({
-    mutationFn: (betId: number) => apiRequest("DELETE", `/api/bets/${betId}`),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/bets"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
-      toast({ title: "Pari annulé", description: "Votre mise a été remboursée." });
-    },
-    onError: (e: any) => {
-      toast({ title: "Erreur", description: e.message || "Impossible d'annuler", variant: "destructive" });
-    },
-  });
+  const copyId = (id: string, betId: number) => {
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(id).catch(() => {});
+    } else {
+      const el = document.createElement("textarea");
+      el.value = id;
+      document.body.appendChild(el);
+      el.select();
+      document.execCommand("copy");
+      document.body.removeChild(el);
+    }
+    setCopiedId(betId);
+    toast({ title: "Identifiant copié", description: "Transmettez-le à l'administrateur pour demander une annulation." });
+    setTimeout(() => setCopiedId(null), 2500);
+  };
 
   /* Stats */
   const totalVolume = bets.reduce((s, { bet }) => s + parseFloat(bet.amount), 0);
@@ -293,33 +297,45 @@ export default function BilletPage() {
               }}>
 
                 {/* Identifiant commercial */}
-                <div style={{
-                  display: "flex", alignItems: "center", justifyContent: "space-between",
-                  paddingBottom: 10, borderBottom: "1px solid #f0f0f0",
-                }}>
-                  <div style={{ fontSize: 11, color: "#888", lineHeight: 1.4 }}>
-                    Identifiant<br />commercial
-                  </div>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8, flex: 1, justifyContent: "flex-end" }}>
-                    <span style={{ fontSize: 11, color: "#333", fontFamily: "monospace" }}>
-                      {cid}
-                    </span>
-                    {isPending && (
+                <div style={{ paddingBottom: 10, borderBottom: "1px solid #f0f0f0" }}>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                    <div style={{ fontSize: 11, color: "#888", lineHeight: 1.4, flexShrink: 0 }}>
+                      Identifiant<br />commercial
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6, flex: 1, justifyContent: "flex-end", minWidth: 0 }}>
+                      <span style={{
+                        fontSize: 11, color: "#333", fontFamily: "monospace",
+                        overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                        maxWidth: "62%",
+                      }}>
+                        {cid}
+                      </span>
                       <button
-                        onClick={() => cancelMutation.mutate(bet.id)}
-                        disabled={cancelMutation.isPending}
+                        onClick={() => copyId(cid, bet.id)}
+                        title="Copier l'identifiant"
                         style={{
-                          background: "#e53935", color: "white",
-                          border: "none", borderRadius: 4,
-                          padding: "4px 10px", fontSize: 11,
-                          fontWeight: 700, cursor: "pointer",
-                          flexShrink: 0,
+                          background: copiedId === bet.id ? "#43a047" : "#1565C0",
+                          color: "white", border: "none", borderRadius: 4,
+                          padding: "4px 9px", fontSize: 11,
+                          display: "flex", alignItems: "center", gap: 3,
+                          cursor: "pointer", flexShrink: 0, transition: "background 0.2s",
                         }}
                       >
-                        ANNULER
+                        {copiedId === bet.id
+                          ? <><Check size={11} /> Copié</>
+                          : <><Copy size={11} /> Copier</>
+                        }
                       </button>
-                    )}
+                    </div>
                   </div>
+                  {isPending && (
+                    <p style={{
+                      fontSize: 10, color: "#888", marginTop: 5, marginBottom: 0,
+                      lineHeight: 1.4,
+                    }}>
+                      Pour demander une annulation, transmettez cet identifiant à l'administrateur.
+                    </p>
+                  )}
                 </div>
 
                 {/* Temps de négociation */}
