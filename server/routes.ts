@@ -84,7 +84,8 @@ declare module "express-session" {
 }
 
 const PgSession = ConnectPgSimple(session);
-const sessionDatabaseUrl = process.env.DATABASE_URL || process.env.SUPABASE_DATABASE_URL;
+// Prefer Supabase for sessions too — same DB as the rest of the app
+const sessionDatabaseUrl = process.env.SUPABASE_DATABASE_URL || process.env.DATABASE_URL;
 const sessionSecret = process.env.SESSION_SECRET;
 
 if (!sessionDatabaseUrl) {
@@ -196,6 +197,7 @@ export async function registerRoutes(
         tableName: "session",
         createTableIfMissing: true,
         pruneSessionInterval: 60 * 60,
+        ssl: process.env.SUPABASE_DATABASE_URL ? { rejectUnauthorized: false } : false,
       }),
        secret: sessionSecret as string,
       resave: false,

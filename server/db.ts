@@ -12,7 +12,11 @@ if (!databaseUrl) {
   throw new Error("No database URL configured.");
 }
 
+// Enable SSL for Supabase (required); skip for local Replit DB
+const isSupabase = !!process.env.SUPABASE_DATABASE_URL;
+
 export const pool = new Pool({
   connectionString: databaseUrl,
+  ssl: isSupabase ? { rejectUnauthorized: false } : false,
 });
 export const db = drizzle(pool, { schema });

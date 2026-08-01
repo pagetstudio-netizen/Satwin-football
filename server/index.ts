@@ -7,6 +7,14 @@ import { storage } from "./storage";
 import { geoGuard } from "./geo-guard";
 import { applySecurity } from "./security";
 
+// Prevent Phusion Passenger from killing the process on unhandled errors
+process.on("uncaughtException", (err) => {
+  console.error("[uncaughtException]", err.message);
+});
+process.on("unhandledRejection", (reason) => {
+  console.error("[unhandledRejection]", reason);
+});
+
 const app = express();
 const httpServer = createServer(app);
 
