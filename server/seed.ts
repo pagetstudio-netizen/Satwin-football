@@ -1,6 +1,6 @@
 import { db } from "./db";
 import { users, products, tasks, paymentChannels, platformSettings, countries, stakingProducts } from "@shared/schema";
-import bcrypt from "bcrypt";
+import bcrypt from "bcryptjs";
 import { eq, sql } from "drizzle-orm";
 
 export async function seed() {

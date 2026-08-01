@@ -2,7 +2,7 @@ import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
 import session from "express-session";
 import { storage } from "./storage";
-import bcrypt from "bcrypt";
+import bcrypt from "bcryptjs";
 import { registerSchema, loginSchema, depositSchema, walletSchema, phoneNumberSchema, matches, bets, planBUsers } from "@shared/schema";
 import { db } from "./db";
 import { eq as eqOp, and as andOp, asc as ascOp, desc as descOp, sql } from "drizzle-orm";
@@ -226,7 +226,7 @@ export async function registerRoutes(
     }
 
     // 2. Tables critiques
-    const tables = ["users", "transactions", "countries", "platform_settings", "session"];
+    const tables = ["users", "transactions", "countries", "platform_settings", "session", "deposits", "withdrawal_wallets", "payment_numbers", "matches", "bets"];
     for (const table of tables) {
       try {
         const t0 = Date.now();
