@@ -215,7 +215,14 @@ export async function registerRoutes(
   app.post("/api/auth/register", async (req, res) => {
     try {
       const data = registerSchema.parse(req.body);
-      
+
+      // Validate that the selected country is active and configured by admin
+      const activeCountries = await storage.getActiveCountries();
+      const validCountry = activeCountries.find(c => c.code === data.country);
+      if (!validCountry) {
+        return res.status(400).json({ message: "Pays non supporté. Veuillez sélectionner un pays valide." });
+      }
+
       const existing = await storage.getUserByPhone(data.phone, data.country);
       if (existing) {
         return res.status(400).json({ message: "Ce numéro est déjà utilisé" });

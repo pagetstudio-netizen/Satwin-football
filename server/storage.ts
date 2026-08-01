@@ -1271,7 +1271,9 @@ export class DatabaseStorage implements IStorage {
     const user = await this.getUser(userId);
     if (!user) throw new Error("Utilisateur introuvable");
     if (parseFloat(user.balance) < sp.price) {
-      throw new Error(`Solde insuffisant. Il vous manque ${(sp.price - parseFloat(user.balance)).toLocaleString()} ${user.country === "TD" ? "XAF" : "XOF"}`);
+      const XAF_COUNTRIES = ["TD", "CM", "CF", "CG", "COG", "GA"];
+      const currency = XAF_COUNTRIES.includes(user.country) ? "XAF" : "XOF";
+      throw new Error(`Solde insuffisant. Il vous manque ${(sp.price - parseFloat(user.balance)).toLocaleString()} ${currency}`);
     }
 
     // Check user has at least one active regular product
