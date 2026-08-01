@@ -1,0 +1,5 @@
+- [SATWIN FOOT Platform](satwin-platform.md) — Platform rebranded to SATWIN FOOT (football betting). Navy/red theme, 5 tabs, matches+bets tables, paris renversé logic.
+- [SendavaPay integration](sendavapay-integration.md) — Payin deposit flow: backend creates+initiates, user phone auto-used, OTP/redirect handled, webhook HMAC verified.
+- [Imported database setup](imported-database-setup.md) — Preserve an existing Replit session table when applying a first-run Drizzle schema.
+- [Plesk GitHub deployment](plesk-github-deployment.md) — Plesk pulls a committed dist build and starts dist/index.cjs relative to the application root.
+- [Login privacy](login-privacy.md) — Do not persist passwords or phone numbers in browser storage; privacy scans classify remembered phone numbers as sensitive.
