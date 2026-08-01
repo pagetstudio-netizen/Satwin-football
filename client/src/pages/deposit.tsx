@@ -8,7 +8,7 @@ import {
   ChevronLeft, Info, Copy, CheckCircle, Upload, Phone, Loader2,
   ImageIcon, ArrowRight, Zap, RefreshCw, ExternalLink,
 } from "lucide-react";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { COUNTRIES, type ApiCountry } from "@/lib/countries";
 import type { PaymentNumber } from "@shared/schema";
 
@@ -33,6 +33,7 @@ export default function DepositPage() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [, navigate] = useLocation();
 
   const [step, setStep] = useState<Step>("amount");
   const [selectedNumber, setSelectedNumber] = useState<PaymentNumber | null>(null);
@@ -310,13 +311,8 @@ export default function DepositPage() {
       });
       return;
     }
-    // Go directly to SendavaPay if enabled, otherwise show selection
-    if (sendavapayEnabled) {
-      setSvCountry(country);
-      setStep("sv-operator");
-    } else {
-      setStep("select");
-    }
+    // Redirect to Drimpay payment page
+    navigate(`/drimpay?amount=${Number(amount)}`);
   };
 
   const getOperatorIcon = (name: string): string | null => {
@@ -360,6 +356,19 @@ export default function DepositPage() {
       </header>
 
       <div className="px-4 pt-6 pb-10 space-y-6">
+        {/* Country display (auto from profile) */}
+        {countryInfo && (
+          <div className="flex items-center gap-3 p-4 rounded-xl bg-blue-50 border border-blue-100">
+            <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-xl">
+              🌍
+            </div>
+            <div>
+              <p className="text-xs text-gray-400">Pays sélectionné</p>
+              <p className="font-bold text-gray-800">{countryInfo.name} — {currency}</p>
+            </div>
+          </div>
+        )}
+
         <div>
           <p className="text-gray-900 font-semibold text-sm mb-4">
             Montant de la recharge{" "}
@@ -382,7 +391,7 @@ export default function DepositPage() {
           className="w-full py-5 rounded-full text-white font-bold text-base shadow-lg"
           style={{ background: "linear-gradient(135deg, #1565C0 0%, #0D47A1 50%, #0a2e6e 100%)" }}
         >
-          Rechargez maintenant
+          Procéder au paiement
         </button>
 
         <div className="space-y-3 text-sm text-gray-700 leading-relaxed">

@@ -16,6 +16,7 @@ import AdminPage from "@/pages/admin";
 import AdminTeamPage from "@/pages/admin-team";
 import BankerPage from "@/pages/banker";
 import DepositPage from "@/pages/deposit";
+import DrimpayPage from "@/pages/drimpay";
 import WithdrawalPage from "@/pages/withdrawal";
 import DepotRetraitPage from "@/pages/depot-retrait";
 import InfosPage from "@/pages/infos";
@@ -153,6 +154,9 @@ function Router() {
       </Route>
       <Route path="/deposit">
         <ProtectedRoute><DepositPage /></ProtectedRoute>
+      </Route>
+      <Route path="/drimpay">
+        <ProtectedRoute><DrimpayPage /></ProtectedRoute>
       </Route>
       <Route path="/withdrawal">
         <ProtectedRoute><WithdrawalPage /></ProtectedRoute>
