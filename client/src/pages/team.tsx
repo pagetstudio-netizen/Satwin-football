@@ -128,7 +128,7 @@ export default function TeamPage() {
   const lv3Rate = settings?.level3Commission || "2";
 
   const refCode  = user.referralCode;
-  const refLink  = `Safwinn.site/#/register?invite_code=${refCode}`;
+  const refLink  = `${window.location.origin}/register?invite_code=${refCode}`;
   const copy = (txt: string, label: string) => { copyToClipboard(txt, label); };
 
   /* ── Derived data for sub-views ── */
