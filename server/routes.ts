@@ -5,7 +5,7 @@ import { storage } from "./storage";
 import bcrypt from "bcrypt";
 import { registerSchema, loginSchema, depositSchema, walletSchema, phoneNumberSchema, matches, bets, planBUsers } from "@shared/schema";
 import { db } from "./db";
-import { eq as eqOp, and as andOp, asc as ascOp, desc as descOp } from "drizzle-orm";
+import { eq as eqOp, and as andOp, asc as ascOp, desc as descOp, sql } from "drizzle-orm";
 import { z } from "zod";
 import ConnectPgSimple from "connect-pg-simple";
 import { 
