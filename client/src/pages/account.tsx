@@ -1,7 +1,7 @@
 import { useAuth } from "@/lib/auth";
 import { useLocation } from "wouter";
 import { useState } from "react";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { getCountryByCode } from "@/lib/countries";
@@ -34,6 +34,14 @@ export default function AccountPage() {
   const handleLogout = async () => { await logout(); navigate("/login"); };
 
   if (!user) return null;
+
+  const { data: betStats } = useQuery<{ pendingAmount: number; totalVolume: number }>({
+    queryKey: ["/api/user/bet-stats"],
+    queryFn: async () => {
+      const res = await apiRequest("GET", "/api/user/bet-stats");
+      return res.json();
+    },
+  });
 
   const balance  = parseFloat(user.balance || "0");
   const country  = getCountryByCode(user.country);
@@ -102,7 +110,7 @@ export default function AccountPage() {
           <div className="flex-1 flex flex-col items-center justify-center py-4 px-2"
             style={{ borderRight: "1px solid #f0f0f0" }}>
             <p className="font-extrabold text-base text-gray-800">
-              {currency} 0,00
+              {fmt(betStats?.pendingAmount ?? 0)}
             </p>
             <p className="text-gray-500 text-xs mt-1 text-center">Commerce en suspens</p>
           </div>
@@ -110,7 +118,7 @@ export default function AccountPage() {
           {/* Volume */}
           <div className="flex-1 flex flex-col items-center justify-center py-4 px-2">
             <p className="font-extrabold text-base text-gray-800">
-              {currency} 0,00
+              {fmt(betStats?.totalVolume ?? 0)}
             </p>
             <p className="text-gray-500 text-xs mt-1 text-center">Volume</p>
           </div>

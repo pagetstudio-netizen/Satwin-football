@@ -2530,6 +2530,21 @@ export async function registerRoutes(
   });
 
   // Check current user's Plan B status
+  app.get("/api/user/bet-stats", requireAuth, async (req, res) => {
+    try {
+      const userId = req.session.userId!;
+      const userBets = await db.select().from(bets).where(eqOp(bets.userId, userId));
+      const pendingAmount = userBets
+        .filter(b => b.status === "pending")
+        .reduce((s, b) => s + parseFloat(b.amount), 0);
+      const totalVolume = userBets
+        .reduce((s, b) => s + parseFloat(b.amount), 0);
+      res.json({ pendingAmount, totalVolume });
+    } catch (e: any) {
+      res.status(500).json({ message: e.message });
+    }
+  });
+
   app.get("/api/user/plan-b-status", requireAuth, async (req, res) => {
     try {
       const userId = req.session.userId!;
