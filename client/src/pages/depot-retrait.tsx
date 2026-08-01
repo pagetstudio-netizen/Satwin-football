@@ -201,6 +201,11 @@ function RetraitForm({ balance, currency, minWithdrawal, withdrawalFee, maxWithd
   const { toast }       = useToast();
   const qc              = useQueryClient();
   const [, navigate]    = useLocation();
+
+  const { data: eligibility } = useQuery<{ eligible: boolean; unlocked: boolean; days: number; needed: number }>({
+    queryKey: ["/api/withdrawal/eligibility"],
+    staleTime: 30_000,
+  });
   const [method, setMethod] = useState<"local" | "transfert">("local");
   const [amount, setAmount] = useState<string>("");
   const [showWallets, setShowWallets] = useState(false);
@@ -256,6 +261,51 @@ function RetraitForm({ balance, currency, minWithdrawal, withdrawalFee, maxWithd
       </div>
 
       <div style={{ padding: "0 14px" }}>
+
+        {/* ── Bandeau éligibilité 48h ── */}
+        {eligibility && !eligibility.eligible && (
+          <div style={{
+            background: "#fef3c7", border: "1px solid #f59e0b", borderRadius: 10,
+            padding: "12px 14px", marginBottom: 14, marginTop: 8,
+          }}>
+            <p style={{ fontWeight: 700, fontSize: 13, color: "#92400e", marginBottom: 4 }}>
+              🔒 Retrait non disponible
+            </p>
+            <p style={{ fontSize: 12, color: "#78350f", lineHeight: 1.6, margin: 0 }}>
+              Vous devez parier sur des matchs pendant <strong>2 jours consécutifs</strong> pour débloquer les retraits.
+            </p>
+            <div style={{ marginTop: 10, display: "flex", gap: 6, alignItems: "center" }}>
+              {[1, 2].map(d => (
+                <div key={d} style={{
+                  width: 32, height: 32, borderRadius: "50%", display: "flex", alignItems: "center",
+                  justifyContent: "center", fontWeight: 800, fontSize: 13,
+                  background: (eligibility.days ?? 0) >= d ? GREEN : "#e5e7eb",
+                  color: (eligibility.days ?? 0) >= d ? "white" : "#9ca3af",
+                  border: `2px solid ${(eligibility.days ?? 0) >= d ? GREEN : "#d1d5db"}`,
+                }}>
+                  {d}
+                </div>
+              ))}
+              <span style={{ fontSize: 12, color: "#6b7280", marginLeft: 4 }}>
+                {eligibility.days ?? 0}/2 jour{(eligibility.days ?? 0) > 1 ? "s" : ""} effectué{(eligibility.days ?? 0) > 1 ? "s" : ""}
+              </span>
+            </div>
+          </div>
+        )}
+
+        {eligibility?.eligible && (
+          <div style={{
+            background: "#dcfce7", border: "1px solid #16a34a", borderRadius: 10,
+            padding: "10px 14px", marginBottom: 14, marginTop: 8,
+            display: "flex", alignItems: "center", gap: 8,
+          }}>
+            <span style={{ fontSize: 18 }}>✅</span>
+            <p style={{ fontSize: 13, color: "#15803d", fontWeight: 600, margin: 0 }}>
+              Éligible au retrait {eligibility.unlocked ? "(débloqué par l'admin)" : "(2 jours consécutifs atteints)"}
+            </p>
+          </div>
+        )}
+
         {/* Volume d'échange */}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 0", borderBottom: "1px solid #f3f4f6" }}>
           <span style={{ color: "#6b7280", fontSize: 13, lineHeight: 1.5 }}>Volume<br/>d'échange valide</span>

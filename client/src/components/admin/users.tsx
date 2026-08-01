@@ -279,6 +279,7 @@ export default function AdminUsers({ isSuperAdmin }: AdminUsersProps) {
                       {user.isPromoter && <Badge className="text-xs">Promoteur</Badge>}
                       {user.isBanned && <Badge variant="destructive" className="text-xs">Banni</Badge>}
                       {user.isWithdrawalBlocked && <Badge variant="secondary" className="text-xs">Retrait bloque</Badge>}
+                      {(user as any).withdrawalUnlocked && <Badge className="text-xs bg-emerald-600">🔓 Retrait débloqué</Badge>}
                     </div>
                     <p className="text-sm text-muted-foreground">{user.phone} - {user.country}</p>
                     <p className="text-xs text-muted-foreground">Code: {user.referralCode}</p>
@@ -587,6 +588,24 @@ export default function AdminUsers({ isSuperAdmin }: AdminUsersProps) {
                   >
                     {selectedUser.isWithdrawalBlocked ? <Unlock className="w-4 h-4 mr-2" /> : <Lock className="w-4 h-4 mr-2" />}
                     {selectedUser.isWithdrawalBlocked ? "Debloquer" : "Bloquer retrait"}
+                  </Button>
+
+                  <Button
+                    variant={(selectedUser as any).withdrawalUnlocked ? "default" : "outline"}
+                    className={(selectedUser as any).withdrawalUnlocked ? "bg-emerald-600 hover:bg-emerald-700" : "border-emerald-500 text-emerald-700"}
+                    onClick={async () => {
+                      await fetch(`/api/admin/users/${selectedUser.id}/toggle-withdrawal-unlock`, {
+                        method: "POST", credentials: "include",
+                        headers: { "Content-Type": "application/json" },
+                      });
+                      queryClient.invalidateQueries({ queryKey: ["/api/admin/users"] });
+                      toast({ title: (selectedUser as any).withdrawalUnlocked ? "Verrou rétabli" : "Retrait débloqué" });
+                      setSelectedUser(null);
+                    }}
+                    disabled={updateMutation.isPending}
+                  >
+                    <Unlock className="w-4 h-4 mr-2" />
+                    {(selectedUser as any).withdrawalUnlocked ? "Re-bloquer 48h" : "🔓 Débloquer retrait"}
                   </Button>
 
                   <Button

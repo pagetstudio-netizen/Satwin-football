@@ -19,6 +19,9 @@ export async function seed() {
     CREATE INDEX IF NOT EXISTS "IDX_session_expire" ON "session" ("expire")
   `);
 
+  // ── Column migrations (must run before any ORM query on the table) ──────────
+  await db.execute(sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS withdrawal_unlocked boolean NOT NULL DEFAULT false`);
+
   // Ensure countries table exists
   await db.execute(sql`
     CREATE TABLE IF NOT EXISTS "countries" (

@@ -53,6 +53,7 @@ export const users = pgTable("users", {
   securityAnswer: text("security_answer"),
   autoBetEnabled: boolean("auto_bet_enabled").notNull().default(false),
   amountShortcuts: text("amount_shortcuts").notNull().default("3000/5000/10000"),
+  withdrawalUnlocked: boolean("withdrawal_unlocked").notNull().default(false),
 });
 
 // Withdrawal wallets

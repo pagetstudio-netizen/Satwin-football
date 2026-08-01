@@ -1285,8 +1285,36 @@ export async function registerRoutes(
         return res.status(400).json({ message: `Montant minimum: ${minWithdrawal} FCFA` });
       }
 
-      if (!user.hasActiveProduct) {
-        return res.status(400).json({ message: "Achetez d'abord un produit" });
+      // ── Éligibilité 48h : 2 jours consécutifs de paris ────────────────────────
+      if (!user.withdrawalUnlocked) {
+        const betDaysResult = await db.execute(
+          sql`SELECT DISTINCT DATE(placed_at) AS bet_day
+              FROM bets
+              WHERE user_id = ${user.id}
+              ORDER BY bet_day DESC
+              LIMIT 10`
+        );
+        const betDays: string[] = (betDaysResult.rows as any[]).map(r =>
+          typeof r.bet_day === "string" ? r.bet_day : (r.bet_day as Date).toISOString().slice(0, 10)
+        );
+        const today = new Date().toISOString().slice(0, 10);
+        const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+        const isEligible = (() => {
+          if (betDays.length < 2) return false;
+          // Most recent bet day must be today or yesterday
+          if (betDays[0] !== today && betDays[0] !== yesterday) return false;
+          // Second bet day must be exactly 1 day before the first
+          const d0 = new Date(betDays[0]);
+          const d1 = new Date(betDays[1]);
+          const diff = Math.round((d0.getTime() - d1.getTime()) / 86400000);
+          return diff === 1;
+        })();
+        if (!isEligible) {
+          return res.status(400).json({
+            message: "Pariez sur des matchs pendant 2 jours consécutifs pour débloquer les retraits",
+            code: "BET_DAYS_REQUIRED",
+          });
+        }
       }
 
       if (user.isWithdrawalBlocked) {
@@ -1768,6 +1796,65 @@ export async function registerRoutes(
       res.json(withdrawal);
     } catch (error: any) {
       res.status(400).json({ message: error.message });
+    }
+  });
+
+  // ── Withdrawal eligibility check (client-facing) ───────────────────────────
+  app.get("/api/withdrawal/eligibility", requireAuth, async (req, res) => {
+    try {
+      const user = await storage.getUser(req.session.userId!);
+      if (!user) return res.status(401).json({ message: "Non authentifié" });
+
+      if (user.withdrawalUnlocked) {
+        return res.json({ eligible: true, unlocked: true, days: 2, needed: 2 });
+      }
+
+      const betDaysResult = await db.execute(
+        sql`SELECT DISTINCT DATE(placed_at) AS bet_day
+            FROM bets
+            WHERE user_id = ${user.id}
+            ORDER BY bet_day DESC
+            LIMIT 10`
+      );
+      const betDays: string[] = (betDaysResult.rows as any[]).map(r =>
+        typeof r.bet_day === "string" ? r.bet_day : (r.bet_day as Date).toISOString().slice(0, 10)
+      );
+
+      const today = new Date().toISOString().slice(0, 10);
+      const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+
+      // Count consecutive streak from today backwards
+      let streak = 0;
+      const cur = new Date(); cur.setHours(0, 0, 0, 0);
+      for (let i = 0; i < 30; i++) {
+        const dayStr = cur.toISOString().slice(0, 10);
+        if (betDays.includes(dayStr)) { streak++; cur.setDate(cur.getDate() - 1); }
+        else break;
+      }
+
+      const eligible = betDays.length >= 2 &&
+        (betDays[0] === today || betDays[0] === yesterday) &&
+        Math.round((new Date(betDays[0]).getTime() - new Date(betDays[1]).getTime()) / 86400000) === 1;
+
+      res.json({ eligible, unlocked: false, days: Math.min(streak, 2), needed: 2 });
+    } catch (e: any) {
+      res.status(500).json({ message: e.message });
+    }
+  });
+
+  // ── Admin: toggle withdrawal unlock for a user ──────────────────────────────
+  app.post("/api/admin/users/:id/toggle-withdrawal-unlock", requireAdmin, async (req, res) => {
+    try {
+      const userId = parseInt(req.params.id);
+      const user = await storage.getUser(userId);
+      if (!user) return res.status(404).json({ message: "Utilisateur introuvable" });
+      const newVal = !user.withdrawalUnlocked;
+      await storage.updateUser(userId, { withdrawalUnlocked: newVal });
+      await storage.logAdminAction(req.session.userId!, "toggle_withdrawal_unlock", userId,
+        `Retrait ${newVal ? "débloqué" : "re-bloqué"} pour user ${userId}`);
+      res.json({ withdrawalUnlocked: newVal });
+    } catch (e: any) {
+      res.status(500).json({ message: e.message });
     }
   });
 
@@ -2723,7 +2810,7 @@ export async function registerRoutes(
       // ── PARIS RENVERSÉ ──────────────────────────────────────────────────────
       // Score réel ≠ score prédit  → utilisateurs GAGNENT (mise + profit)
       // Score réel = score prédit  → plateforme gagne :
-      //   • match Plan B (isVipOnly) → PERTE SÈCHE (pas de remboursement)
+      //   • match Plan B (isVipOnly) → REMBOURSEMENT (l'admin a offert ce match aux Plan B)
       //   • match du jour (isFeatured) → REMBOURSEMENT (mise seule)
       //   • match ordinaire            → PERTE (rien)
       const scored = realScore.trim() === match.predictedScore.trim();
@@ -2736,11 +2823,11 @@ export async function registerRoutes(
       if (!scored) {
         matchResult = "won";         // real ≠ predicted → users win
       } else if (isVipOnly) {
-        matchResult = "lost";        // Plan B match → no refund ever
+        matchResult = "refunded";    // Plan B match → admin garantit → remboursement
       } else if (isFeatured) {
-        matchResult = "refunded";    // real = predicted + featured → refund
+        matchResult = "refunded";    // real = predicted + match du jour → remboursement
       } else {
-        matchResult = "lost";        // real = predicted + ordinary  → lose
+        matchResult = "lost";        // real = predicted + match ordinaire → perte
       }
 
       await db.update(matches).set({ realScore, result: matchResult, status: "finished" }).where(eqOp(matches.id, id));
@@ -2827,7 +2914,7 @@ export async function registerRoutes(
 
       const liveRows = (await db.execute(
         // @ts-ignore
-        `SELECT id, external_id, predicted_score, profit_rate, home_team, away_team, status, is_featured
+        `SELECT id, external_id, predicted_score, profit_rate, home_team, away_team, status, is_featured, is_vip_only
          FROM matches
          WHERE is_active = true
            AND external_id IN (${sanitizedIds})
@@ -2847,10 +2934,11 @@ export async function registerRoutes(
           const realScore = `${fixture.goalsHome}-${fixture.goalsAway}`;
           const scored = realScore.trim() === (row.predicted_score ?? "").trim();
           const isFeatured = !!row.is_featured;
+          const isVipOnlyLive = !!row.is_vip_only;
           let matchResult: string;
-          if (!scored)          matchResult = "won";
-          else if (isFeatured)  matchResult = "refunded";
-          else                  matchResult = "lost";
+          if (!scored)                         matchResult = "won";
+          else if (isVipOnlyLive || isFeatured) matchResult = "refunded"; // Plan B ou match du jour → remboursement
+          else                                  matchResult = "lost";
 
           // Sanitize before interpolation: realScore = "N-N" digits only, matchResult = enum word
           const safeRealScore = realScore.replace(/[^0-9\-]/g, "").slice(0, 10);
