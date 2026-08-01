@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { useAuth } from "@/lib/auth";
 import { getCountryByCode } from "@/lib/countries";
-import { Home, User, Copy, Check } from "lucide-react";
+import { Home, User, Copy, Check, ChevronDown, ChevronUp } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useState as useLocalState } from "react";
 
@@ -81,11 +81,18 @@ function truncate(s: string, n: number) {
   return s.length > n ? s.slice(0, n) + "..." : s;
 }
 
+/** True when the match is still active (not yet settled) */
+function isMatchActive(matchStatus: string | undefined) {
+  return matchStatus === "upcoming" || matchStatus === "live";
+}
+
 export default function BilletPage() {
   const { user } = useAuth();
   const [, navigate] = useLocation();
   const { toast } = useToast();
   const [copiedId, setCopiedId] = useLocalState<number | null>(null);
+  // Track which bet cards have their details hidden (collapsed)
+  const [hiddenBets, setHiddenBets] = useLocalState<Set<number>>(new Set());
 
   const country  = getCountryByCode(user?.country || "");
   const currency = country?.currency || "XOF";
@@ -110,11 +117,19 @@ export default function BilletPage() {
     setTimeout(() => setCopiedId(null), 2500);
   };
 
-  /* Stats */
+  const toggleDetails = (betId: number) => {
+    setHiddenBets(prev => {
+      const next = new Set(prev);
+      if (next.has(betId)) next.delete(betId);
+      else next.add(betId);
+      return next;
+    });
+  };
+
+  /* Stats — "Gagner" only counts SETTLED won bets, never in-progress */
   const totalVolume = bets.reduce((s, { bet }) => s + parseFloat(bet.amount), 0);
-  const totalGain   = bets.reduce((s, { bet, match: m }) => {
+  const totalGain   = bets.reduce((s, { bet }) => {
     if (bet.status === "won" && bet.profit) return s + parseFloat(bet.profit);
-    if (bet.status === "pending" && m) return s + parseFloat(bet.amount) * parseFloat(m.profitRate) / 100;
     return s;
   }, 0);
 
@@ -132,7 +147,6 @@ export default function BilletPage() {
           <Home size={22} color="white" />
         </button>
         <div style={{ display: "flex", gap: 8 }}>
-          {/* User badge */}
           <div style={{
             display: "flex", alignItems: "center", gap: 5,
             background: "rgba(0,0,0,0.25)", borderRadius: 6, padding: "4px 10px",
@@ -140,7 +154,6 @@ export default function BilletPage() {
             <User size={14} color="white" />
             <span style={{ color: "white", fontSize: 12, fontWeight: 600 }}>{masked}</span>
           </div>
-          {/* Balance badge */}
           <div style={{
             display: "flex", alignItems: "center", gap: 5,
             background: "rgba(0,0,0,0.25)", borderRadius: 6, padding: "4px 10px",
@@ -163,7 +176,7 @@ export default function BilletPage() {
         <span style={{ color: TEAL, fontSize: 13, fontWeight: 600 }}>Plus</span>
       </div>
 
-      {/* ── Stats row ── */}
+      {/* ── Stats row — only settled wins counted ── */}
       <div style={{
         background: "#f5e6c8",
         display: "grid", gridTemplateColumns: "1fr 1fr",
@@ -207,12 +220,33 @@ export default function BilletPage() {
         )}
 
         {bets.map(({ bet, match: m }) => {
-          const amount  = parseFloat(bet.amount);
-          const profit  = bet.profit ? parseFloat(bet.profit)
+          const amount     = parseFloat(bet.amount);
+          const profit     = bet.profit ? parseFloat(bet.profit)
             : m ? amount * parseFloat(m.profitRate) / 100 : 0;
-          const cid     = commercialId(bet.id, bet.placedAt);
-          const isPending = bet.status === "pending";
-          const score   = (bet as any).chosenScore || m?.predictedScore || "?-?";
+          const cid        = commercialId(bet.id, bet.placedAt);
+          const isPending  = bet.status === "pending";
+          const score      = (bet as any).chosenScore || m?.predictedScore || "?-?";
+          const active     = isMatchActive(m?.status);
+          const isHidden   = hiddenBets.has(bet.id);
+
+          /* Statut affiché dans la ligne "Gagner" */
+          let gainLabel = "Gagner";
+          let gainValue: string;
+          let gainColor = GREEN;
+
+          if (active) {
+            gainLabel = "Statut";
+            gainValue = "En cours";
+            gainColor = "#f59e0b";
+          } else if (bet.status === "won") {
+            gainValue = fmtAmount(profit);
+          } else if (bet.status === "lost") {
+            gainLabel = "Statut";
+            gainValue = "Perdu";
+            gainColor = "#e53935";
+          } else {
+            gainValue = fmtAmount(profit);
+          }
 
           return (
             <div key={bet.id} style={{ marginBottom: 16 }}>
@@ -234,7 +268,6 @@ export default function BilletPage() {
                   position: "relative",
                   overflow: "hidden",
                 }}>
-                  {/* diagonal stripe decorations */}
                   <div style={{
                     position: "absolute", top: 0, left: -10, width: 20, height: "100%",
                     background: "rgba(255,255,255,0.1)", transform: "skewX(-20deg)",
@@ -249,14 +282,12 @@ export default function BilletPage() {
                 </div>
 
                 <div style={{ padding: "12px 14px" }}>
-                  {/* Match date */}
                   {m && (
                     <div style={{ textAlign: "center", fontSize: 12, color: "#888", marginBottom: 8 }}>
                       {fmtMatchDate(m.matchDate)}
                     </div>
                   )}
 
-                  {/* Teams row */}
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                     <span style={{ fontWeight: 700, fontSize: 14, color: "#222", maxWidth: "35%" }}>
                       {truncate(m?.homeTeam || "—", 8)}
@@ -267,7 +298,6 @@ export default function BilletPage() {
                     </span>
                   </div>
 
-                  {/* Score line */}
                   {m && (
                     <div style={{
                       display: "flex", alignItems: "center", gap: 6,
@@ -288,90 +318,115 @@ export default function BilletPage() {
                 </div>
               </div>
 
-              {/* ── Details block ── */}
+              {/* ── Details block with toggle ── */}
               <div style={{
                 background: "white", marginTop: 2,
-                padding: "10px 14px 12px",
                 boxShadow: "0 2px 8px rgba(0,0,0,0.06)",
                 borderRadius: "0 0 10px 10px",
               }}>
 
-                {/* Identifiant commercial */}
-                <div style={{ paddingBottom: 10, borderBottom: "1px solid #f0f0f0" }}>
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                    <div style={{ fontSize: 11, color: "#888", lineHeight: 1.4, flexShrink: 0 }}>
-                      Identifiant<br />commercial
+                {/* Toggle button */}
+                <button
+                  onClick={() => toggleDetails(bet.id)}
+                  style={{
+                    width: "100%", display: "flex", alignItems: "center",
+                    justifyContent: "space-between", padding: "8px 14px",
+                    background: "none", border: "none", cursor: "pointer",
+                    borderBottom: isHidden ? "none" : "1px solid #f0f0f0",
+                  }}
+                >
+                  <span style={{ fontSize: 12, color: "#888" }}>
+                    {isHidden ? "Afficher les détails" : "Masquer les détails"}
+                  </span>
+                  {isHidden
+                    ? <ChevronDown size={15} color="#aaa" />
+                    : <ChevronUp size={15} color="#aaa" />
+                  }
+                </button>
+
+                {/* Collapsible details */}
+                {!isHidden && (
+                  <div style={{ padding: "0 14px 12px" }}>
+
+                    {/* Identifiant commercial */}
+                    <div style={{ paddingBottom: 10, paddingTop: 4, borderBottom: "1px solid #f0f0f0" }}>
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                        <div style={{ fontSize: 11, color: "#888", lineHeight: 1.4, flexShrink: 0 }}>
+                          Identifiant<br />commercial
+                        </div>
+                        <div style={{ display: "flex", alignItems: "center", gap: 6, flex: 1, justifyContent: "flex-end", minWidth: 0 }}>
+                          <span style={{
+                            fontSize: 11, color: "#333", fontFamily: "monospace",
+                            overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                            maxWidth: "62%",
+                          }}>
+                            {cid}
+                          </span>
+                          <button
+                            onClick={() => copyId(cid, bet.id)}
+                            title="Copier l'identifiant"
+                            style={{
+                              background: copiedId === bet.id ? "#43a047" : "#1565C0",
+                              color: "white", border: "none", borderRadius: 4,
+                              padding: "4px 9px", fontSize: 11,
+                              display: "flex", alignItems: "center", gap: 3,
+                              cursor: "pointer", flexShrink: 0, transition: "background 0.2s",
+                            }}
+                          >
+                            {copiedId === bet.id
+                              ? <><Check size={11} /> Copié</>
+                              : <><Copy size={11} /> Copier</>
+                            }
+                          </button>
+                        </div>
+                      </div>
+                      {isPending && (
+                        <p style={{
+                          fontSize: 10, color: "#888", marginTop: 5, marginBottom: 0,
+                          lineHeight: 1.4,
+                        }}>
+                          Pour demander une annulation, transmettez cet identifiant à notre équipe.
+                        </p>
+                      )}
                     </div>
-                    <div style={{ display: "flex", alignItems: "center", gap: 6, flex: 1, justifyContent: "flex-end", minWidth: 0 }}>
-                      <span style={{
-                        fontSize: 11, color: "#333", fontFamily: "monospace",
-                        overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-                        maxWidth: "62%",
-                      }}>
-                        {cid}
-                      </span>
-                      <button
-                        onClick={() => copyId(cid, bet.id)}
-                        title="Copier l'identifiant"
-                        style={{
-                          background: copiedId === bet.id ? "#43a047" : "#1565C0",
-                          color: "white", border: "none", borderRadius: 4,
-                          padding: "4px 9px", fontSize: 11,
-                          display: "flex", alignItems: "center", gap: 3,
-                          cursor: "pointer", flexShrink: 0, transition: "background 0.2s",
-                        }}
-                      >
-                        {copiedId === bet.id
-                          ? <><Check size={11} /> Copié</>
-                          : <><Copy size={11} /> Copier</>
-                        }
-                      </button>
-                    </div>
-                  </div>
-                  {isPending && (
-                    <p style={{
-                      fontSize: 10, color: "#888", marginTop: 5, marginBottom: 0,
-                      lineHeight: 1.4,
+
+                    {/* Temps de négociation */}
+                    <div style={{
+                      display: "flex", alignItems: "center", justifyContent: "space-between",
+                      paddingTop: 8, paddingBottom: 8, borderBottom: "1px solid #f0f0f0",
                     }}>
-                      Pour demander une annulation, transmettez cet identifiant à notre équipe.
-                    </p>
-                  )}
-                </div>
+                      <div style={{ fontSize: 11, color: "#888", lineHeight: 1.4 }}>
+                        Temps de<br />négociation
+                      </div>
+                      <span style={{ fontSize: 12, color: "#333" }}>
+                        {fmtDate(bet.placedAt)}
+                      </span>
+                    </div>
 
-                {/* Temps de négociation */}
-                <div style={{
-                  display: "flex", alignItems: "center", justifyContent: "space-between",
-                  paddingTop: 8, paddingBottom: 8, borderBottom: "1px solid #f0f0f0",
-                }}>
-                  <div style={{ fontSize: 11, color: "#888", lineHeight: 1.4 }}>
-                    Temps de<br />négociation
+                    {/* Montant */}
+                    <div style={{
+                      display: "flex", alignItems: "center", justifyContent: "space-between",
+                      paddingTop: 8, paddingBottom: 6, borderBottom: "1px solid #f0f0f0",
+                    }}>
+                      <span style={{ fontSize: 13, color: TEAL, fontWeight: 700 }}>Montant</span>
+                      <span style={{ fontSize: 14, color: "#222", fontWeight: 600 }}>
+                        {fmtAmount(amount)}
+                      </span>
+                    </div>
+
+                    {/* Gagner / Statut */}
+                    <div style={{
+                      display: "flex", alignItems: "center", justifyContent: "space-between",
+                      paddingTop: 8,
+                    }}>
+                      <span style={{ fontSize: 13, color: gainColor, fontWeight: 700 }}>{gainLabel}</span>
+                      <span style={{ fontSize: 14, color: gainColor, fontWeight: 600 }}>
+                        {gainValue}
+                      </span>
+                    </div>
+
                   </div>
-                  <span style={{ fontSize: 12, color: "#333" }}>
-                    {fmtDate(bet.placedAt)}
-                  </span>
-                </div>
-
-                {/* Montant */}
-                <div style={{
-                  display: "flex", alignItems: "center", justifyContent: "space-between",
-                  paddingTop: 8, paddingBottom: 6, borderBottom: "1px solid #f0f0f0",
-                }}>
-                  <span style={{ fontSize: 13, color: TEAL, fontWeight: 700 }}>Montant</span>
-                  <span style={{ fontSize: 14, color: "#222", fontWeight: 600 }}>
-                    {fmtAmount(amount)}
-                  </span>
-                </div>
-
-                {/* Gagner */}
-                <div style={{
-                  display: "flex", alignItems: "center", justifyContent: "space-between",
-                  paddingTop: 8,
-                }}>
-                  <span style={{ fontSize: 13, color: GREEN, fontWeight: 700 }}>Gagner</span>
-                  <span style={{ fontSize: 14, color: "#222", fontWeight: 600 }}>
-                    {fmtAmount(profit)}
-                  </span>
-                </div>
+                )}
               </div>
 
             </div>
