@@ -445,9 +445,10 @@ function MatchDetail({
               <span className="text-sm text-center" style={{ color: "#15803d" }}>{opt.chance.toFixed(2)}%</span>
               <div className="flex flex-col items-end gap-1">
                 <span className="text-xs text-gray-700">{formatPool(opt.pool)}</span>
-                {alreadyBet ? (
+                {alreadyBet && (
                   <span className="px-2 py-1 rounded text-xs font-bold text-green-700 bg-green-50">Misé</span>
-                ) : (match.status === "upcoming" || match.status === "live") ? (
+                )}
+                {(match.status === "upcoming" || match.status === "live") ? (
                   <button
                     onClick={() => setSelectedScore(opt)}
                     className="px-4 py-1 rounded text-xs font-bold text-white"
