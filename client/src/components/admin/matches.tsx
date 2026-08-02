@@ -11,7 +11,7 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import {
   Plus, Pencil, Trash2, CheckCircle, Radio, Ban, RefreshCw,
-  Star, StarOff, Users, TrendingUp, Filter,
+  Star, StarOff, Users, TrendingUp, Filter, Search, X,
 } from "lucide-react";
 
 /* ── Types ─────────────────────────────────────────────────────────────────── */
@@ -136,6 +136,7 @@ export default function AdminMatches() {
   /* ── Filter state ── */
   const [filterStatus,   setFilterStatus]   = useState<string>("all");
   const [filterFeatured, setFilterFeatured] = useState<boolean>(false);
+  const [searchText,     setSearchText]     = useState<string>("");
 
   /* ── Data ── */
   const { data: matchList = [], isLoading } = useQuery<Match[]>({
@@ -151,6 +152,11 @@ export default function AdminMatches() {
   const filteredList = matchList.filter(m => {
     if (filterStatus !== "all" && m.status !== filterStatus) return false;
     if (filterFeatured && !m.isFeatured) return false;
+    if (searchText.trim()) {
+      const q = searchText.toLowerCase();
+      const haystack = `${m.homeTeam} ${m.awayTeam} ${m.league || ""}`.toLowerCase();
+      if (!haystack.includes(q)) return false;
+    }
     return true;
   });
 
@@ -356,6 +362,27 @@ export default function AdminMatches() {
           </div>
         </div>
       )}
+
+      {/* ── Search bar ──────────────────────────────────────────────────────── */}
+      <div className="relative">
+        <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+        <input
+          type="text"
+          value={searchText}
+          onChange={e => setSearchText(e.target.value)}
+          placeholder="Rechercher équipe, ligue…"
+          className="w-full pl-8 pr-8 py-2 text-sm border rounded-lg outline-none focus:ring-2 focus:ring-blue-200"
+          style={{ borderColor: "#D1D5DB" }}
+        />
+        {searchText && (
+          <button
+            onClick={() => setSearchText("")}
+            className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+          >
+            <X size={14} />
+          </button>
+        )}
+      </div>
 
       {/* ── Filter bar ──────────────────────────────────────────────────────── */}
       <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>

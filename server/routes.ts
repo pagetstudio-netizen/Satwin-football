@@ -2733,19 +2733,12 @@ export async function registerRoutes(
         const already = (rows as any)?.rows?.length > 0 || (rows as any)?.length > 0;
         if (already) { skipped++; continue; }
 
-        await db.insert(matches).values({
-          homeTeam:       f.homeTeam,
-          awayTeam:       f.awayTeam,
-          homeFlag:       f.homeFlag || "🏴",
-          awayFlag:       f.awayFlag || "🏴",
-          predictedScore: "0-0",   // admin can edit after import
-          profitRate:     "7.5",
-          matchDate:      f.matchDate,
-          league:         f.league || "",
-          // @ts-ignore extra columns added via ALTER TABLE
-          externalId:     f.externalId,
-          createdBy:      req.session.userId,
-        });
+        // Use raw SQL to avoid Drizzle column-count mismatch with schema vs actual DB
+        await db.execute(
+          // @ts-ignore
+          `INSERT INTO matches (home_team, away_team, home_flag, away_flag, predicted_score, profit_rate, match_date, league, external_id, created_by)
+           VALUES ('${f.homeTeam.replace(/'/g,"''")}', '${f.awayTeam.replace(/'/g,"''")}', '${(f.homeFlag||"🏴").replace(/'/g,"''")}', '${(f.awayFlag||"🏴").replace(/'/g,"''")}', '0-0', '7.5', '${f.matchDate.toISOString()}', '${(f.league||"").replace(/'/g,"''")}', '${String(f.externalId).replace(/'/g,"''")}', ${req.session.userId ?? "NULL"})`
+        );
         imported++;
       }
 

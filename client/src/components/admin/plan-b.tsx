@@ -11,7 +11,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { Search, UserPlus, UserMinus, Crown, Shield, Lock, Unlock } from "lucide-react";
+import { Search, UserPlus, UserMinus, Crown, Shield, Lock, Unlock, X } from "lucide-react";
 
 /* ── Types ─────────────────────────────────────────────────────────────────── */
 interface PlanBMember {
@@ -70,9 +70,12 @@ const STATUS_COLOR: Record<string, string> = {
 export default function AdminPlanB() {
   const { toast } = useToast();
 
-  /* ── Search ── */
+  /* ── Search (users) ── */
   const [searchQ,    setSearchQ]    = useState("");
   const [searchDone, setSearchDone] = useState(false);
+
+  /* ── Search (matches) ── */
+  const [matchSearch, setMatchSearch] = useState("");
 
   /* ── Data ── */
   const { data: members = [], isLoading: membersLoading } = useQuery<PlanBMember[]>({
@@ -125,6 +128,12 @@ export default function AdminPlanB() {
 
   /* ── Helpers ── */
   const memberIds = new Set(members.map(m => m.user_id));
+
+  const filteredMatches = planBMatches.filter(m => {
+    if (!matchSearch.trim()) return true;
+    const q = matchSearch.toLowerCase();
+    return `${m.homeTeam} ${m.awayTeam} ${m.league || ""}`.toLowerCase().includes(q);
+  });
 
   const handleSearch = () => {
     if (!searchQ.trim()) return;
@@ -302,13 +311,33 @@ export default function AdminPlanB() {
             En cas de perte sur ces matchs, <strong>aucun remboursement</strong> même si le match est « Match du jour ».
           </p>
 
+          {/* Match search */}
+          <div className="relative mb-3">
+            <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+            <input
+              type="text"
+              value={matchSearch}
+              onChange={e => setMatchSearch(e.target.value)}
+              placeholder="Rechercher match, ligue…"
+              className="w-full pl-8 pr-7 py-1.5 text-sm border rounded-lg outline-none focus:ring-2 focus:ring-yellow-200"
+              style={{ borderColor: "#D1D5DB" }}
+            />
+            {matchSearch && (
+              <button onClick={() => setMatchSearch("")} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                <X size={13} />
+              </button>
+            )}
+          </div>
+
           {matchesLoading ? (
             <p className="text-sm text-muted-foreground">Chargement…</p>
           ) : planBMatches.length === 0 ? (
             <p className="text-sm text-muted-foreground text-center py-4">Aucun match actif</p>
+          ) : filteredMatches.length === 0 ? (
+            <p className="text-sm text-muted-foreground text-center py-4">Aucun match ne correspond à la recherche</p>
           ) : (
             <div className="space-y-2">
-              {planBMatches.map(m => {
+              {filteredMatches.map(m => {
                 const isFinishedOrCancelled = m.status === "finished" || m.status === "cancelled";
                 return (
                   <div key={m.id} style={{
