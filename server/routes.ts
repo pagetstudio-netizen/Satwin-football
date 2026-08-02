@@ -1446,6 +1446,66 @@ export async function registerRoutes(
     }
   });
 
+  // ── Prime de parrainage — dépôts hebdomadaires des filleuls ──────────────
+  app.get("/api/team/weekly-prime", requireAuth, async (req, res) => {
+    try {
+      const me = await storage.getUser(req.session.userId!);
+      if (!me) return res.status(401).json({ message: "Non authentifié" });
+
+      // Week boundaries (Monday 00:00 → Sunday 23:59)
+      const now = new Date();
+      const dayOfWeek = now.getDay() === 0 ? 6 : now.getDay() - 1; // 0=Mon … 6=Sun
+      const thisMonday = new Date(now);
+      thisMonday.setDate(now.getDate() - dayOfWeek);
+      thisMonday.setHours(0, 0, 0, 0);
+      const thisSunday = new Date(thisMonday);
+      thisSunday.setDate(thisMonday.getDate() + 6);
+      thisSunday.setHours(23, 59, 59, 999);
+      const lastMonday = new Date(thisMonday);
+      lastMonday.setDate(thisMonday.getDate() - 7);
+      const lastSunday = new Date(thisSunday);
+      lastSunday.setDate(thisSunday.getDate() - 7);
+
+      type DayRow = { day: string; volume: string };
+
+      const query = async (from: Date, to: Date): Promise<DayRow[]> => {
+        const rows = await db.execute(sql`
+          SELECT TO_CHAR(d.created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD') AS day,
+                 SUM(d.amount) AS volume
+          FROM deposits d
+          JOIN users u ON u.id = d.user_id
+          WHERE u.referred_by = ${me.referralCode}
+            AND d.status = 'completed'
+            AND d.created_at >= ${from.toISOString()}::timestamptz
+            AND d.created_at <= ${to.toISOString()}::timestamptz
+          GROUP BY 1
+          ORDER BY 1 DESC
+        `);
+        return ((rows as any)?.rows ?? rows) as DayRow[];
+      };
+
+      const [thisWeek, lastWeek] = await Promise.all([
+        query(thisMonday, thisSunday),
+        query(lastMonday, lastSunday),
+      ]);
+
+      const mapWeek = (rows: DayRow[]) => {
+        const days = rows.map(r => ({
+          date: r.day,
+          volume: parseFloat(r.volume) || 0,
+          gain: Math.round((parseFloat(r.volume) || 0) * 0.05 * 100) / 100,
+        }));
+        const totalVolume = days.reduce((s, d) => s + d.volume, 0);
+        const totalGain   = Math.round(totalVolume * 0.05 * 100) / 100;
+        return { days, totalVolume, totalGain };
+      };
+
+      res.json({ thisWeek: mapWeek(thisWeek), lastWeek: mapWeek(lastWeek) });
+    } catch (error: any) {
+      serverError(res, error);
+    }
+  });
+
   // Tasks
   app.get("/api/tasks", requireAuth, async (req, res) => {
     try {

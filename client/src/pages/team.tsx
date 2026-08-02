@@ -25,7 +25,11 @@ interface Member { id: number; fullName: string; phone: string; country: string;
 interface DetailedTeam { level1: Member[]; level2: Member[]; level3: Member[]; }
 interface Transaction { id: number; type: string; amount: string; description: string; createdAt: string; }
 
-type View = "main" | "mon_equipe" | "rapport" | "code" | "prime" | "nouveau_registre" | "nouveau_depot" | "retrait_total" | "pari_total" | "gain" | "dossiers";
+type View = "main" | "mon_equipe" | "rapport" | "code" | "prime" | "prime_detail" | "nouveau_registre" | "nouveau_depot" | "retrait_total" | "pari_total" | "gain" | "dossiers";
+
+interface PrimeDay { date: string; volume: number; gain: number; }
+interface PrimeWeek { days: PrimeDay[]; totalVolume: number; totalGain: number; }
+interface WeeklyPrime { thisWeek: PrimeWeek; lastWeek: PrimeWeek; }
 
 /* ── Helpers ── */
 const fmt = (n: number) => n.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -121,6 +125,9 @@ export default function TeamPage() {
   const { data: settings } = useQuery<Record<string, string>>({ queryKey: ["/api/settings"] });
   const { data: team } = useQuery<DetailedTeam>({ queryKey: ["/api/team/details"] });
   const { data: txList } = useQuery<Transaction[]>({ queryKey: ["/api/transactions"] });
+  const { data: weeklyPrime } = useQuery<WeeklyPrime>({ queryKey: ["/api/team/weekly-prime"], enabled: view === "prime" });
+  const [primeTab, setPrimeTab] = useState<"current" | "last">("current");
+  const [primeDetail, setPrimeDetail] = useState<PrimeDay | null>(null);
 
   if (!user) return null;
 
@@ -498,17 +505,127 @@ export default function TeamPage() {
   if (view === "pari_total")      return <DailyDataPage title="Aujourd'hui Pari total"       totalLabel="Pari total"       total={(stats?.level1Invested||0)+(stats?.level2Invested||0)+(stats?.level3Invested||0)} levels={depotLevels} onBack={() => setView("main")} />;
   if (view === "gain")            return <DailyDataPage title="Aujourd'hui GAIN"             totalLabel="GAIN total"       total={totalCommission}            levels={commLevels}     onBack={() => setView("main")} />;
 
-  /* Prime promotionnelle */
-  if (view === "prime") {
+  /* ── Prime de parrainage — detail d'un jour ── */
+  if (view === "prime_detail" && primeDetail) {
+    const gainPositif = primeDetail.gain >= 0;
     return (
       <div style={{ minHeight: "100vh", background: "#f5f5f5", display: "flex", flexDirection: "column" }}>
-        <SubHeader title="Prime promotionnelle" onBack={() => setView("main")} />
-        <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 32, textAlign: "center" }}>
-          <div style={{ width: 80, height: 80, borderRadius: 24, background: "linear-gradient(135deg, #15803d, #166534)", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 18, boxShadow: "0 8px 24px rgba(21,128,61,0.3)" }}>
-            <Gift size={40} color="white" />
+        <SubHeader title="Détail de la prime" onBack={() => setView("prime")} />
+        <div style={{ flex: 1, padding: 16 }}>
+          <div style={{ background: "white", borderRadius: 14, overflow: "hidden", boxShadow: "0 2px 12px rgba(0,0,0,0.06)" }}>
+            {[
+              { label: "Date", value: primeDetail.date },
+              { label: "Volume valide", value: `${fmt(primeDetail.volume)} ${currency}` },
+              { label: "Taux de prime", value: "5 %" },
+              { label: "Gain total", value: `${gainPositif ? "+" : ""}${fmt(primeDetail.gain)} ${currency}`, color: gainPositif ? "#16a34a" : "#dc2626" },
+              { label: "Statut", value: "Versement chaque mardi", color: "#f59e0b" },
+            ].map((row, i, arr) => (
+              <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "16px 18px", borderBottom: i < arr.length - 1 ? "1px solid #f3f4f6" : "none" }}>
+                <span style={{ color: "#6b7280", fontSize: 14 }}>{row.label}</span>
+                <span style={{ fontWeight: 700, fontSize: 14, color: row.color || "#111827" }}>{row.value}</span>
+              </div>
+            ))}
           </div>
-          <p style={{ fontWeight: 700, fontSize: 18, color: "#111827", marginBottom: 8 }}>Prime promotionnelle</p>
-          <p style={{ color: "#6b7280", fontSize: 14, lineHeight: 1.7 }}>Aucune prime promotionnelle active pour le moment. Invitez des amis pour débloquer des bonus exclusifs !</p>
+        </div>
+      </div>
+    );
+  }
+
+  /* ── Prime de parrainage ── */
+  if (view === "prime") {
+    const activeWeek = primeTab === "current"
+      ? weeklyPrime?.thisWeek
+      : weeklyPrime?.lastWeek;
+    const days = activeWeek?.days || [];
+    const totalVolume = activeWeek?.totalVolume || 0;
+    const totalGain   = activeWeek?.totalGain   || 0;
+
+    return (
+      <div style={{ minHeight: "100vh", background: "#f5f5f5", display: "flex", flexDirection: "column" }}>
+        <SubHeader title="Prime de parrainage" onBack={() => setView("main")} />
+
+        <div style={{ flex: 1, overflowY: "auto" }}>
+
+          {/* ── Explication ── */}
+          <div style={{ margin: "14px 14px 0", background: "white", borderRadius: 14, padding: "14px 16px", boxShadow: "0 1px 8px rgba(0,0,0,0.05)", borderLeft: "4px solid #15803d" }}>
+            <p style={{ margin: "0 0 6px", fontWeight: 700, fontSize: 14, color: "#15803d" }}>📢 Prime promotionnelle</p>
+            <p style={{ margin: 0, fontSize: 13, color: "#374151", lineHeight: 1.65 }}>
+              Vous recevrez <strong>5 % du montant total des dépôts</strong> de vos utilisateurs chaque <strong>mardi</strong>.
+              Seuls les <em>nouveaux dépôts</em> de la semaine sont pris en compte — les dépôts déjà comptabilisés lors d'un versement précédent ne génèrent pas de nouvelle prime.
+            </p>
+          </div>
+
+          {/* ── Onglets ── */}
+          <div style={{ display: "flex", margin: "14px 14px 0", background: "white", borderRadius: 12, overflow: "hidden", boxShadow: "0 1px 6px rgba(0,0,0,0.06)" }}>
+            {(["current", "last"] as const).map(tab => {
+              const active = primeTab === tab;
+              return (
+                <button key={tab} onClick={() => setPrimeTab(tab)} style={{
+                  flex: 1, padding: "13px 0", border: "none", cursor: "pointer",
+                  background: "transparent",
+                  borderBottom: active ? `2px solid ${GREEN}` : "2px solid transparent",
+                  fontWeight: active ? 700 : 500,
+                  fontSize: 13,
+                  color: active ? GREEN : "#6b7280",
+                  letterSpacing: 0.3,
+                }}>
+                  {tab === "current" ? "CETTE SEMAINE" : "LA SEMAINE DERNIÈRE"}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* ── Tableau ── */}
+          <div style={{ margin: "12px 14px 20px", background: "white", borderRadius: 14, overflow: "hidden", boxShadow: "0 2px 12px rgba(0,0,0,0.06)" }}>
+            {/* En-tête colonnes */}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 24px", padding: "11px 14px", background: "#fafafa", borderBottom: "1px solid #f0f0f0" }}>
+              {["Date", "Volume valide", "Gain total"].map(h => (
+                <span key={h} style={{ fontSize: 12, fontWeight: 600, color: "#9ca3af", textAlign: h === "Date" ? "left" : "right" }}>{h}</span>
+              ))}
+              <span />
+            </div>
+
+            {!weeklyPrime ? (
+              /* Chargement */
+              <div style={{ padding: "32px 16px", textAlign: "center" }}>
+                <p style={{ color: "#9ca3af", fontSize: 14, margin: 0 }}>Chargement…</p>
+              </div>
+            ) : days.length === 0 ? (
+              /* Vide */
+              <div style={{ padding: "40px 16px", textAlign: "center" }}>
+                <Gift size={40} color="#d1d5db" style={{ marginBottom: 10 }} />
+                <p style={{ color: "#9ca3af", fontSize: 14, margin: 0 }}>Aucun dépôt cette semaine</p>
+              </div>
+            ) : (
+              <>
+                {days.map((day, i) => {
+                  const positive = day.gain >= 0;
+                  return (
+                    <div key={day.date} onClick={() => { setPrimeDetail(day); setView("prime_detail"); }}
+                      style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 24px", padding: "15px 14px", cursor: "pointer", borderBottom: i < days.length - 1 ? "1px solid #f9fafb" : "none", alignItems: "center" }}>
+                      <span style={{ fontSize: 13, color: "#111827", fontWeight: 500 }}>{day.date}</span>
+                      <span style={{ fontSize: 13, color: "#374151", textAlign: "right" }}>{fmt(day.volume)}</span>
+                      <span style={{ fontSize: 13, fontWeight: 700, color: positive ? "#16a34a" : "#dc2626", textAlign: "right" }}>
+                        {positive ? "" : "-"}{fmt(Math.abs(day.gain))}
+                      </span>
+                      <ChevronRight size={14} color="#d1d5db" style={{ justifySelf: "end" }} />
+                    </div>
+                  );
+                })}
+
+                {/* Ligne Total */}
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 24px", padding: "14px 14px", background: "#fafafa", borderTop: "2px solid #f0f0f0", alignItems: "center" }}>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: "#111827" }}>Total</span>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: "#111827", textAlign: "right" }}>{fmt(totalVolume)}</span>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: totalGain >= 0 ? "#16a34a" : "#dc2626", textAlign: "right" }}>
+                    {totalGain >= 0 ? "" : "-"}{fmt(Math.abs(totalGain))}
+                  </span>
+                  <span />
+                </div>
+              </>
+            )}
+          </div>
+
         </div>
       </div>
     );
