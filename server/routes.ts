@@ -1645,6 +1645,7 @@ export async function registerRoutes(
         support2Enabled: settings.support2Enabled !== "false",
         channelEnabled: settings.channelEnabled !== "false",
         groupEnabled: settings.groupEnabled !== "false",
+        popupButtonLabel: settings.popupButtonLabel || "Cliquez ici pour rejoindre le groupe",
         withdrawalStartHour: settings.withdrawalStartHour || "9",
         withdrawalEndHour: settings.withdrawalEndHour || "17",
       });

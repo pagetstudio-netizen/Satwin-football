@@ -3,7 +3,149 @@ import { useLocation } from "wouter";
 import { useState, useEffect, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { getCountryByCode } from "@/lib/countries";
-import { Home, Volume2, ChevronDown } from "lucide-react";
+import { Home, Volume2, ChevronDown, X } from "lucide-react";
+
+/* ─── Types settings/links ──────────────────────────── */
+interface LinkSettings {
+  groupLink: string;
+  groupType: string;
+  groupLabel: string;
+  groupEnabled: boolean;
+  popupButtonLabel: string;
+}
+
+/* ─── Group Popup ────────────────────────────────────── */
+function GroupPopup({ settings, onClose }: { settings: LinkSettings; onClose: () => void }) {
+  const isTelegram = settings.groupType === "telegram";
+  const isWhatsApp = settings.groupType === "whatsapp";
+
+  return (
+    <div
+      style={{
+        position: "fixed", inset: 0, zIndex: 9998,
+        display: "flex", alignItems: "center", justifyContent: "center",
+        background: "rgba(0,0,0,0.55)",
+        padding: "0 24px",
+      }}
+      onClick={onClose}
+    >
+      <div
+        onClick={e => e.stopPropagation()}
+        style={{
+          background: "#fff",
+          borderRadius: 18,
+          padding: "28px 22px 22px",
+          maxWidth: 340,
+          width: "100%",
+          boxShadow: "0 8px 40px rgba(0,0,0,0.28)",
+          display: "flex", flexDirection: "column", alignItems: "center",
+          gap: 0,
+          animation: "alertIn 0.18s ease",
+          position: "relative",
+        }}
+      >
+        {/* Close button */}
+        <button
+          onClick={onClose}
+          style={{
+            position: "absolute", top: 12, right: 12,
+            background: "#f3f4f6", border: "none", borderRadius: "50%",
+            width: 30, height: 30, cursor: "pointer",
+            display: "flex", alignItems: "center", justifyContent: "center",
+          }}
+        >
+          <X size={16} color="#666" />
+        </button>
+
+        {/* Icon */}
+        <div style={{ marginBottom: 12 }}>
+          {isTelegram && (
+            <div style={{
+              width: 64, height: 64, borderRadius: "50%",
+              background: "linear-gradient(135deg, #2AABEE, #229ED9)",
+              display: "flex", alignItems: "center", justifyContent: "center",
+            }}>
+              <svg width="36" height="36" viewBox="0 0 24 24" fill="white">
+                <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.562 8.248l-1.97 9.289c-.145.658-.537.818-1.084.508l-3-2.21-1.447 1.394c-.16.16-.295.295-.605.295l.213-3.053 5.56-5.023c.242-.213-.054-.333-.373-.12l-6.871 4.326-2.962-.924c-.643-.204-.657-.643.136-.953l11.57-4.461c.537-.194 1.006.131.833.932z"/>
+              </svg>
+            </div>
+          )}
+          {isWhatsApp && (
+            <div style={{
+              width: 64, height: 64, borderRadius: "50%",
+              background: "linear-gradient(135deg, #25D366, #128C7E)",
+              display: "flex", alignItems: "center", justifyContent: "center",
+            }}>
+              <svg width="36" height="36" viewBox="0 0 24 24" fill="white">
+                <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
+              </svg>
+            </div>
+          )}
+          {!isTelegram && !isWhatsApp && (
+            <div style={{
+              width: 64, height: 64, borderRadius: "50%",
+              background: "linear-gradient(135deg, #15803d, #166534)",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              fontSize: 32,
+            }}>👥</div>
+          )}
+        </div>
+
+        {/* Title */}
+        <p style={{ fontWeight: 800, fontSize: 17, color: "#111827", textAlign: "center", margin: "0 0 6px" }}>
+          {settings.groupLabel}
+        </p>
+        <p style={{ fontSize: 13, color: "#6b7280", textAlign: "center", margin: "0 0 20px", lineHeight: 1.5 }}>
+          Rejoignez notre groupe pour ne manquer aucune information importante sur vos paris.
+        </p>
+
+        {/* Join button */}
+        <a
+          href={settings.groupLink}
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={onClose}
+          style={{
+            display: "block",
+            width: "100%",
+            padding: "14px 0",
+            borderRadius: 10,
+            background: isTelegram
+              ? "linear-gradient(135deg, #2AABEE, #229ED9)"
+              : isWhatsApp
+              ? "linear-gradient(135deg, #25D366, #128C7E)"
+              : "#15803d",
+            color: "#fff",
+            fontWeight: 700, fontSize: 14,
+            textAlign: "center",
+            textDecoration: "none",
+            letterSpacing: 0.3,
+          }}
+        >
+          {settings.popupButtonLabel}
+        </a>
+
+        {/* Skip */}
+        <button
+          onClick={onClose}
+          style={{
+            marginTop: 12, background: "none", border: "none",
+            color: "#9ca3af", fontSize: 13, cursor: "pointer",
+          }}
+        >
+          Ignorer pour l'instant
+        </button>
+      </div>
+
+      <style>{`
+        @keyframes alertIn {
+          from { transform: scale(0.88); opacity: 0; }
+          to   { transform: scale(1);    opacity: 1; }
+        }
+      `}</style>
+    </div>
+  );
+}
 
 /* ─── Design tokens ────────────────────────────────── */
 const TEAL        = "#15803d";
@@ -319,8 +461,19 @@ export default function HomePage() {
   const { user }       = useAuth();
   const [, navigate]   = useLocation();
 
-  const { data: settings } = useQuery<Record<string, string>>({ queryKey: ["/api/settings"] });
-  const { data: matches  } = useQuery<Match[]>({ queryKey: ["/api/matches"] });
+  const { data: settings     } = useQuery<Record<string, string>>({ queryKey: ["/api/settings"] });
+  const { data: linkSettings } = useQuery<LinkSettings>({ queryKey: ["/api/settings/links"] });
+  const { data: matches      } = useQuery<Match[]>({ queryKey: ["/api/matches"] });
+
+  /* Show popup once per session */
+  const [showPopup, setShowPopup] = useState(false);
+  useEffect(() => {
+    if (!linkSettings) return;
+    if (linkSettings.groupEnabled === false) return;
+    if (sessionStorage.getItem("groupPopupShown")) return;
+    sessionStorage.setItem("groupPopupShown", "1");
+    setShowPopup(true);
+  }, [linkSettings]);
 
   if (!user) return null;
 
@@ -343,6 +496,12 @@ export default function HomePage() {
 
   return (
     <div style={{ background: "#F2F4F7", minHeight: "100vh" }}>
+
+      {/* ── GROUP POPUP ── */}
+      {showPopup && linkSettings && (
+        <GroupPopup settings={linkSettings} onClose={() => setShowPopup(false)} />
+      )}
+
       <style>{`
         @keyframes ticker {
           0%   { transform: translateX(110%); }
