@@ -2730,10 +2730,10 @@ export async function registerRoutes(
         const already = (dupRows as any)?.rows?.length > 0 || (Array.isArray(dupRows) && dupRows.length > 0);
         if (already) { skipped++; continue; }
 
-        // Parameterized INSERT — no string interpolation
+        // Parameterized INSERT — Date object passed directly (not toISOString) for correct PG timestamp binding
         await db.execute(sql`
           INSERT INTO matches (home_team, away_team, home_flag, away_flag, predicted_score, profit_rate, match_date, league, external_id, created_by)
-          VALUES (${f.homeTeam}, ${f.awayTeam}, ${f.homeFlag || "🏴"}, ${f.awayFlag || "🏴"}, '0-0', '7.5', ${f.matchDate.toISOString()}, ${f.league || ""}, ${String(f.externalId)}, ${req.session.userId ?? null})
+          VALUES (${f.homeTeam}, ${f.awayTeam}, ${f.homeFlag || "🏴"}, ${f.awayFlag || "🏴"}, '0-0', '7.5', ${f.matchDate}, ${f.league || ""}, ${String(f.externalId)}, ${req.session.userId ?? null})
         `);
         imported++;
       }
@@ -2744,7 +2744,8 @@ export async function registerRoutes(
       res.json({ message: `${imported} match(s) importé(s), ${skipped} ignoré(s)`, imported, skipped, total: fixtures.length });
     } catch (e: any) {
       console.error("[sync_matches]", e);
-      serverError(res, e);
+      // Admin endpoint — surface the real error so the panel can show it
+      res.status(500).json({ message: `Erreur sync: ${e?.message || e}` });
     }
   });
 
@@ -3042,10 +3043,10 @@ export async function registerRoutes(
         const already = (dupRows as any)?.rows?.length > 0 || (Array.isArray(dupRows) && dupRows.length > 0);
         if (already) { skipped++; continue; }
 
-        // Parameterized INSERT
+        // Parameterized INSERT — Date object passed directly for correct PG timestamp binding
         await db.execute(sql`
           INSERT INTO matches (home_team, away_team, home_flag, away_flag, predicted_score, profit_rate, match_date, league, external_id, is_active, created_at)
-          VALUES (${f.homeTeam}, ${f.awayTeam}, ${f.homeFlag || "🏴"}, ${f.awayFlag || "🏴"}, '0-0', '7.5', ${f.matchDate.toISOString()}, ${f.league || ""}, ${String(f.externalId)}, true, NOW())
+          VALUES (${f.homeTeam}, ${f.awayTeam}, ${f.homeFlag || "🏴"}, ${f.awayFlag || "🏴"}, '0-0', '7.5', ${f.matchDate}, ${f.league || ""}, ${String(f.externalId)}, true, NOW())
           ON CONFLICT DO NOTHING
         `);
         imported++;
