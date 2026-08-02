@@ -5,7 +5,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
-import { Users, ArrowDownToLine, ArrowUpFromLine, ShoppingCart, Wallet, Clock, TrendingUp, Award, Calendar, RotateCcw, Loader2, AlertTriangle } from "lucide-react";
+import { Users, ArrowDownToLine, ArrowUpFromLine, ShoppingCart, Wallet, Clock, TrendingUp, Award, Calendar, RotateCcw, Loader2, AlertTriangle, Gift, ChevronRight } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 
@@ -30,6 +30,18 @@ interface DashboardStats {
   totalCommissions: number;
 }
 
+interface PrimeBeneficiary {
+  userId: number; fullName: string; phone: string;
+  depositVolume: number; primeAmount: number;
+}
+interface PrimePreview {
+  isTuesday: boolean;
+  beneficiaries: PrimeBeneficiary[];
+  totalPrime: number;
+  weekStart: string;
+  weekEnd: string;
+}
+
 interface AdminDashboardProps {
   isSuperAdmin: boolean;
 }
@@ -40,6 +52,9 @@ export default function AdminDashboard({ isSuperAdmin }: AdminDashboardProps) {
   const [endDate, setEndDate] = useState("");
   const [appliedDates, setAppliedDates] = useState<{start: string, end: string}>({start: "", end: ""});
   const [showResetDialog, setShowResetDialog] = useState(false);
+  const [showPrimeDialog, setShowPrimeDialog] = useState(false);
+  const [primePreview, setPrimePreview] = useState<PrimePreview | null>(null);
+  const [primeLoading, setPrimeLoading] = useState(false);
 
   const queryParams = new URLSearchParams();
   if (appliedDates.start) queryParams.append("startDate", appliedDates.start);
@@ -65,6 +80,42 @@ export default function AdminDashboard({ isSuperAdmin }: AdminDashboardProps) {
     setEndDate("");
     setAppliedDates({ start: "", end: "" });
   };
+
+  const openPrimeDialog = async () => {
+    setPrimeLoading(true);
+    setPrimePreview(null);
+    setShowPrimeDialog(true);
+    try {
+      const res = await fetch("/api/admin/prime-preview", { credentials: "include" });
+      const data = await res.json();
+      setPrimePreview(data);
+    } catch {
+      toast({ title: "Erreur", description: "Impossible de charger l'aperçu", variant: "destructive" });
+      setShowPrimeDialog(false);
+    } finally {
+      setPrimeLoading(false);
+    }
+  };
+
+  const payPrimeMutation = useMutation({
+    mutationFn: async () => {
+      const response = await apiRequest("POST", "/api/admin/pay-weekly-prime");
+      if (!response.ok) {
+        const r = await response.json();
+        throw new Error(r.message || "Erreur versement");
+      }
+      return response.json();
+    },
+    onSuccess: (data) => {
+      setShowPrimeDialog(false);
+      setPrimePreview(null);
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/stats"] });
+      toast({ title: `✅ Prime versée à ${data.credited} parrain(s) !` });
+    },
+    onError: (error: any) => {
+      toast({ title: "Erreur", description: error.message, variant: "destructive" });
+    },
+  });
 
   const resetStatsMutation = useMutation({
     mutationFn: async () => {
@@ -299,6 +350,31 @@ export default function AdminDashboard({ isSuperAdmin }: AdminDashboardProps) {
         ))}
       </div>
 
+      {/* ── Prime de parrainage ── */}
+      <Card className="border-green-500/40">
+        <CardContent className="p-4">
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-green-500/20 flex items-center justify-center">
+                <Gift className="w-5 h-5 text-green-600" />
+              </div>
+              <div>
+                <p className="font-medium text-foreground">Prime de parrainage</p>
+                <p className="text-xs text-muted-foreground">5 % des dépôts des filleuls — chaque mardi</p>
+              </div>
+            </div>
+            <Button
+              size="sm"
+              className="bg-green-600 hover:bg-green-700 text-white"
+              onClick={openPrimeDialog}
+            >
+              <Gift className="w-4 h-4 mr-2" />
+              Verser
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
       {isSuperAdmin && (
         <Card className="border-destructive/50">
           <CardContent className="p-4">
@@ -325,6 +401,119 @@ export default function AdminDashboard({ isSuperAdmin }: AdminDashboardProps) {
           </CardContent>
         </Card>
       )}
+
+      {/* ── Dialog Prime de parrainage ── */}
+      <Dialog open={showPrimeDialog} onOpenChange={setShowPrimeDialog}>
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Gift className="w-5 h-5 text-green-600" />
+              Prime de parrainage — aperçu
+            </DialogTitle>
+            <DialogDescription>
+              5 % des dépôts complétés des filleuls cette semaine
+            </DialogDescription>
+          </DialogHeader>
+
+          {primeLoading ? (
+            <div className="flex justify-center py-10">
+              <Loader2 className="w-8 h-8 animate-spin text-green-600" />
+            </div>
+          ) : primePreview ? (
+            <div className="space-y-4">
+              {/* Avertissement jour */}
+              {!primePreview.isTuesday && (
+                <div className="flex items-start gap-3 p-3 rounded-lg bg-amber-500/10 border border-amber-500/30">
+                  <AlertTriangle className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" />
+                  <p className="text-sm text-amber-700 dark:text-amber-400">
+                    Attention — aujourd'hui <strong>n'est pas mardi</strong>. Vous pouvez quand même confirmer si nécessaire.
+                  </p>
+                </div>
+              )}
+
+              {/* Infos semaine */}
+              <div className="flex gap-2 text-xs text-muted-foreground bg-muted/50 rounded-lg p-3">
+                <Calendar className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                <span>Semaine du <strong>{primePreview.weekStart}</strong> au <strong>{primePreview.weekEnd}</strong></span>
+              </div>
+
+              {primePreview.beneficiaries.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground text-sm">
+                  Aucun parrain éligible cette semaine.<br/>
+                  (Aucun dépôt complété de filleuls)
+                </div>
+              ) : (
+                <>
+                  {/* Résumé */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="bg-green-500/10 rounded-lg p-3 text-center">
+                      <p className="text-xs text-muted-foreground">Parrains éligibles</p>
+                      <p className="text-2xl font-bold text-green-600">{primePreview.beneficiaries.length}</p>
+                    </div>
+                    <div className="bg-green-500/10 rounded-lg p-3 text-center">
+                      <p className="text-xs text-muted-foreground">Total à verser</p>
+                      <p className="text-2xl font-bold text-green-600">
+                        {primePreview.totalPrime.toLocaleString("fr-FR", { minimumFractionDigits: 2 })} F
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Liste des bénéficiaires */}
+                  <div className="border rounded-lg overflow-hidden">
+                    {/* En-tête */}
+                    <div className="grid grid-cols-[1fr_auto_auto] gap-2 px-3 py-2 bg-muted/60 text-xs font-semibold text-muted-foreground">
+                      <span>Parrain</span>
+                      <span className="text-right">Vol. dépôts</span>
+                      <span className="text-right">Prime (5%)</span>
+                    </div>
+                    {/* Lignes */}
+                    {primePreview.beneficiaries.map((b, i) => (
+                      <div key={b.userId} className={`grid grid-cols-[1fr_auto_auto] gap-2 px-3 py-2 items-center text-sm ${i < primePreview.beneficiaries.length - 1 ? "border-b" : ""}`}>
+                        <div>
+                          <p className="font-medium text-foreground truncate max-w-[130px]">{b.fullName}</p>
+                          <p className="text-xs text-muted-foreground">{b.phone}</p>
+                        </div>
+                        <span className="text-right text-muted-foreground text-xs">
+                          {b.depositVolume.toLocaleString("fr-FR", { minimumFractionDigits: 0 })} F
+                        </span>
+                        <span className="text-right font-bold text-green-600">
+                          +{b.primeAmount.toLocaleString("fr-FR", { minimumFractionDigits: 2 })} F
+                        </span>
+                      </div>
+                    ))}
+                    {/* Total */}
+                    <div className="grid grid-cols-[1fr_auto_auto] gap-2 px-3 py-2 bg-muted/40 border-t text-sm font-bold">
+                      <span>Total</span>
+                      <span />
+                      <span className="text-right text-green-600">
+                        +{primePreview.totalPrime.toLocaleString("fr-FR", { minimumFractionDigits: 2 })} F
+                      </span>
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+          ) : null}
+
+          <DialogFooter className="gap-2 mt-2">
+            <Button variant="outline" onClick={() => setShowPrimeDialog(false)}>
+              Annuler
+            </Button>
+            <Button
+              className="bg-green-600 hover:bg-green-700 text-white"
+              onClick={() => payPrimeMutation.mutate()}
+              disabled={payPrimeMutation.isPending || primeLoading || !primePreview || primePreview.beneficiaries.length === 0}
+            >
+              {payPrimeMutation.isPending ? (
+                <Loader2 className="w-4 h-4 animate-spin mr-2" />
+              ) : (
+                <Gift className="w-4 h-4 mr-2" />
+              )}
+              Confirmer le versement
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={showResetDialog} onOpenChange={setShowResetDialog}>
         <DialogContent>

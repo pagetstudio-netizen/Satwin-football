@@ -2279,6 +2279,110 @@ export async function registerRoutes(
   });
 
   // Reset stats route (Super Admin only)
+  // ── Prime de parrainage — aperçu et versement ────────────────────────────
+  app.get("/api/admin/prime-preview", requireAdmin, async (req, res) => {
+    try {
+      // Semaine en cours : lundi 00:00 → dimanche 23:59
+      const now = new Date();
+      const dayOfWeek = now.getDay() === 0 ? 6 : now.getDay() - 1;
+      const monday = new Date(now);
+      monday.setDate(now.getDate() - dayOfWeek);
+      monday.setHours(0, 0, 0, 0);
+      const sunday = new Date(monday);
+      sunday.setDate(monday.getDate() + 6);
+      sunday.setHours(23, 59, 59, 999);
+
+      const isTuesday = now.getDay() === 2;
+
+      // Pour chaque parrain actif, calculer le total des dépôts de ses filleuls cette semaine
+      const rows = await db.execute(sql`
+        SELECT
+          u.id           AS user_id,
+          u.full_name    AS full_name,
+          u.phone        AS phone,
+          u.referral_code AS referral_code,
+          COALESCE(SUM(d.amount), 0)::numeric AS deposit_volume
+        FROM users u
+        JOIN users referred ON referred.referred_by = u.referral_code
+        JOIN deposits d ON d.user_id = referred.id
+          AND d.status = 'completed'
+          AND d.created_at >= ${monday.toISOString()}::timestamptz
+          AND d.created_at <= ${sunday.toISOString()}::timestamptz
+        GROUP BY u.id, u.full_name, u.phone, u.referral_code
+        HAVING COALESCE(SUM(d.amount), 0) > 0
+        ORDER BY deposit_volume DESC
+      `);
+
+      const list: any[] = ((rows as any)?.rows ?? rows);
+      const beneficiaries = list.map(r => ({
+        userId:        Number(r.user_id),
+        fullName:      r.full_name,
+        phone:         r.phone,
+        depositVolume: parseFloat(r.deposit_volume),
+        primeAmount:   Math.round(parseFloat(r.deposit_volume) * 0.05 * 100) / 100,
+      }));
+      const totalPrime = beneficiaries.reduce((s, b) => s + b.primeAmount, 0);
+
+      res.json({ isTuesday, beneficiaries, totalPrime, weekStart: monday.toISOString().slice(0, 10), weekEnd: sunday.toISOString().slice(0, 10) });
+    } catch (e: any) {
+      serverError(res, e);
+    }
+  });
+
+  app.post("/api/admin/pay-weekly-prime", requireAdmin, async (req, res) => {
+    try {
+      const now = new Date();
+      const dayOfWeek = now.getDay() === 0 ? 6 : now.getDay() - 1;
+      const monday = new Date(now);
+      monday.setDate(now.getDate() - dayOfWeek);
+      monday.setHours(0, 0, 0, 0);
+      const sunday = new Date(monday);
+      sunday.setDate(monday.getDate() + 6);
+      sunday.setHours(23, 59, 59, 999);
+
+      const rows = await db.execute(sql`
+        SELECT
+          u.id           AS user_id,
+          COALESCE(SUM(d.amount), 0)::numeric AS deposit_volume
+        FROM users u
+        JOIN users referred ON referred.referred_by = u.referral_code
+        JOIN deposits d ON d.user_id = referred.id
+          AND d.status = 'completed'
+          AND d.created_at >= ${monday.toISOString()}::timestamptz
+          AND d.created_at <= ${sunday.toISOString()}::timestamptz
+        GROUP BY u.id
+        HAVING COALESCE(SUM(d.amount), 0) > 0
+      `);
+
+      const list: any[] = ((rows as any)?.rows ?? rows);
+      let credited = 0;
+
+      for (const r of list) {
+        const uid   = Number(r.user_id);
+        const prime = Math.round(parseFloat(r.deposit_volume) * 0.05 * 100) / 100;
+        if (prime <= 0) continue;
+
+        const user = await storage.getUser(uid);
+        if (!user) continue;
+        const newBalance = parseFloat(user.balance) + prime;
+        await storage.updateUser(uid, { balance: String(newBalance) });
+        await storage.createTransaction({
+          userId: uid, type: "prime_parrainage",
+          amount: String(prime),
+          description: `Prime parrainage semaine du ${monday.toISOString().slice(0, 10)} (5 % dépôts filleuls)`,
+        });
+        credited++;
+      }
+
+      await storage.logAdminAction(req.session.userId!, "pay_weekly_prime", null,
+        `Prime hebdomadaire versée à ${credited} parrain(s) — semaine du ${monday.toISOString().slice(0, 10)}`);
+
+      res.json({ success: true, credited });
+    } catch (e: any) {
+      serverError(res, e);
+    }
+  });
+
   app.post("/api/admin/reset-stats", requireAdmin, async (req, res) => {
     try {
       const adminUser = await storage.getUser(req.session.userId!);
