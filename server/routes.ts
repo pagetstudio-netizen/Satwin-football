@@ -2925,7 +2925,7 @@ export async function registerRoutes(
         predictedScore,
         profitRate: String(profitRate),
         matchDate:  new Date(matchDate),
-        minBet:     parseInt(minBet)  || 1000,
+        minBet:     parseInt(minBet)  || 1500,
         maxBet:     parseInt(maxBet)  || 500000,
         league:     league || "",
         createdBy:  req.session.userId,

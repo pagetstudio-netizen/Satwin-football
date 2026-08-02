@@ -134,7 +134,7 @@ export default function TeamPage() {
   const country  = getCountryByCode(user.country);
   const currency = country?.currency || "CFA";
   const totalCommission  = stats?.totalCommission  || 0;
-  const lv1Rate = settings?.level1Commission || "25";
+  const lv1Rate = settings?.level1Commission || "15";
   const lv2Rate = settings?.level2Commission || "3";
   const lv3Rate = settings?.level3Commission || "2";
 

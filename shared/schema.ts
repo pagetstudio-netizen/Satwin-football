@@ -400,7 +400,7 @@ export const matches = pgTable("matches", {
   predictedScore: text("predicted_score").notNull(),   // e.g. "2-1"
   profitRate:     decimal("profit_rate", { precision: 5, scale: 2 }).notNull(),
   matchDate:      timestamp("match_date").notNull(),
-  minBet:         integer("min_bet").notNull().default(1000),
+  minBet:         integer("min_bet").notNull().default(1500),
   maxBet:         integer("max_bet").notNull().default(500000),
   status:         text("status").notNull().default("upcoming"), // upcoming|live|finished|cancelled
   realScore:      text("real_score"),
