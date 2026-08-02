@@ -11,61 +11,20 @@ const TEAL_DARK   = "#166534";
 const ORANGE      = "#FF6B00";
 const GREEN_BADGE = "#15803d";
 
-/* ─── Hero: Gold hexagonal badge ────────────────────── */
-function GoldBadge() {
-  return (
-    <div style={{
-      position: "absolute",
-      right: "22%",
-      top: 14,
-      width: 88,
-      height: 88,
-      filter: "drop-shadow(0 4px 12px rgba(0,0,0,0.5))",
-    }}>
-      {/* Outer hex */}
-      <div style={{
-        width: "100%",
-        height: "100%",
-        clipPath: "polygon(50% 0%, 95% 25%, 95% 75%, 50% 100%, 5% 75%, 5% 25%)",
-        background: "linear-gradient(170deg, #f5e060 0%, #d4a010 40%, #c07800 70%, #e8b820 100%)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-      }}>
-        {/* Inner hex (border effect) */}
-        <div style={{
-          width: "84%",
-          height: "84%",
-          clipPath: "polygon(50% 0%, 95% 25%, 95% 75%, 50% 100%, 5% 75%, 5% 25%)",
-          background: "linear-gradient(170deg, #f0d840 0%, #c89010 50%, #b06800 100%)",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          flexDirection: "column",
-        }}>
-          <span style={{
-            color: "#4a2000",
-            fontWeight: 900,
-            fontSize: 11,
-            lineHeight: 1.35,
-            textAlign: "center",
-            letterSpacing: 0.3,
-            textShadow: "0 1px 0 rgba(255,220,80,0.5)",
-            fontFamily: "system-ui, -apple-system, sans-serif",
-          }}>
-            PARI{"\n"}
-            <span style={{ display: "block" }}>AUTOMATIQUE</span>
-          </span>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 /* ─── Hero Carousel ─────────────────────────────────── */
+const SLIDES = [
+  "/slide1.jpg",
+  "/slide4.jpg",
+  "/slide3.jpg",
+  "/slide2.jpg",
+  "/slide5.png",
+  "/slide6.png",
+];
+
 function HeroCarousel() {
   const [current, setCurrent] = useState(0);
-  const total = 3;
+  const total = SLIDES.length;
   const timer = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const startTimer = () => {
@@ -78,116 +37,28 @@ function HeroCarousel() {
   const goTo = (i: number) => { setCurrent(i); startTimer(); };
 
   return (
-    <div style={{ position: "relative", overflow: "hidden", height: 182, background: "#1a0842", borderRadius: 14 }}>
+    <div style={{ position: "relative", overflow: "hidden", borderRadius: 14, background: "#000" }}>
       {/* Slides wrapper */}
       <div style={{
         display: "flex",
-        height: "100%",
         transition: "transform 0.45s cubic-bezier(0.4,0,0.2,1)",
         transform: `translateX(-${current * 100}%)`,
         willChange: "transform",
       }}>
-
-        {/* Slide 1 – Pari Automatique */}
-        <div style={{
-          minWidth: "100%",
-          height: 182,
-          position: "relative",
-          overflow: "hidden",
-          background:
-            "radial-gradient(ellipse at 15% 0%, rgba(100,220,80,0.18) 0%, transparent 55%)," +
-            "radial-gradient(ellipse at 85% 0%, rgba(160,80,255,0.25) 0%, transparent 55%)," +
-            "linear-gradient(145deg, #0a2e14 0%, #16094a 40%, #2d0b5a 65%, #1a0842 100%)",
-        }}>
-          {/* Stadium floor glow */}
-          <div style={{
-            position: "absolute",
-            bottom: 0,
-            left: 0,
-            right: 0,
-            height: 60,
-            background: "linear-gradient(to top, rgba(0,180,80,0.25), transparent)",
-          }} />
-          {/* Football */}
-          <div style={{
-            position: "absolute",
-            left: -14,
-            bottom: -8,
-            fontSize: 118,
-            lineHeight: 1,
-            filter: "drop-shadow(4px 4px 12px rgba(0,0,0,0.7))",
-            userSelect: "none",
-          }}>⚽</div>
-          {/* Stadium lights top-right */}
-          <div style={{
-            position: "absolute",
-            top: 0,
-            right: 0,
-            width: 100,
-            height: 60,
-            background: "radial-gradient(ellipse at 100% 0%, rgba(255,220,100,0.22) 0%, transparent 70%)",
-          }} />
-          {/* Gold badge */}
-          <GoldBadge />
-          {/* Bottom text */}
-          <div style={{
-            position: "absolute",
-            bottom: 18,
-            left: "48%",
-            right: 8,
-            textAlign: "center",
-          }}>
-            <p style={{
-              color: "rgba(255,255,255,0.92)",
-              fontSize: 11,
-              lineHeight: 1.5,
-              margin: 0,
-              fontWeight: 500,
-              textShadow: "0 1px 4px rgba(0,0,0,0.7)",
-            }}>
-              Activez la fonction de pari automatique{"\n"}
-              <span style={{ display: "block" }}>pour placer vos mises sans effort e</span>
-              <span style={{ display: "block" }}>de maximiser vos gains</span>
-            </p>
+        {SLIDES.map((src, i) => (
+          <div key={i} style={{ minWidth: "100%", position: "relative" }}>
+            <img
+              src={src}
+              alt={`Slide ${i + 1}`}
+              style={{
+                width: "100%",
+                display: "block",
+                objectFit: "cover",
+                borderRadius: 14,
+              }}
+            />
           </div>
-        </div>
-
-        {/* Slide 2 – Bonus */}
-        <div style={{
-          minWidth: "100%",
-          height: 182,
-          position: "relative",
-          overflow: "hidden",
-          background: "linear-gradient(135deg, #0a6b2a 0%, #1a9b40 50%, #2ab854 100%)",
-        }}>
-          <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 6, padding: "0 24px" }}>
-            <span style={{ fontSize: 36, filter: "drop-shadow(0 4px 8px rgba(0,0,0,0.4))" }}>💰</span>
-            <p style={{ color: "white", fontWeight: 900, fontSize: 24, margin: 0, textShadow: "0 2px 8px rgba(0,0,0,0.5)", textAlign: "center" }}>
-              BONUS{"\n"}<span style={{ fontSize: 32 }}>BIENVENU</span>
-            </p>
-            <p style={{ color: "rgba(255,255,255,0.85)", fontSize: 13, margin: 0, fontWeight: 600, textAlign: "center" }}>Jusqu'à <strong>70%</strong> sur votre premier dépôt</p>
-          </div>
-          {/* Decorative coins */}
-          <div style={{ position: "absolute", top: 10, right: 16, fontSize: 28, opacity: 0.7 }}>🪙</div>
-          <div style={{ position: "absolute", bottom: 20, right: 30, fontSize: 22, opacity: 0.6 }}>💵</div>
-        </div>
-
-        {/* Slide 3 – Matches du jour */}
-        <div style={{
-          minWidth: "100%",
-          height: 182,
-          position: "relative",
-          overflow: "hidden",
-          background: "linear-gradient(135deg, #0a1a4a 0%, #1a3a8a 50%, #0a2a6a 100%)",
-        }}>
-          <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 8 }}>
-            <span style={{ fontSize: 42, filter: "drop-shadow(0 4px 8px rgba(0,0,0,0.5))" }}>🏆</span>
-            <p style={{ color: "white", fontWeight: 900, fontSize: 20, margin: 0, textAlign: "center", textShadow: "0 2px 8px rgba(0,0,0,0.5)" }}>Matchs du Jour</p>
-            <p style={{ color: "rgba(255,255,255,0.7)", fontSize: 12, margin: 0, textAlign: "center" }}>Misez sur les meilleurs matchs et gagnez</p>
-          </div>
-          <div style={{ position: "absolute", bottom: 14, left: 20, fontSize: 24, opacity: 0.5 }}>⚽</div>
-          <div style={{ position: "absolute", top: 14, right: 20, fontSize: 20, opacity: 0.4 }}>⚽</div>
-        </div>
+        ))}
       </div>
 
       {/* Carousel dots */}
@@ -208,7 +79,7 @@ function HeroCarousel() {
               width:  i === current ? 18 : 6,
               height: 6,
               borderRadius: 3,
-              background: i === current ? "white" : "rgba(255,255,255,0.45)",
+              background: i === current ? "white" : "rgba(255,255,255,0.55)",
               border: "none",
               padding: 0,
               cursor: "pointer",
