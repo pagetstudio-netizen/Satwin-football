@@ -95,6 +95,12 @@ if (!sessionSecret) {
   throw new Error("SESSION_SECRET must be configured.");
 }
 
+/** Log the real error server-side, return a generic message to the client */
+function serverError(res: Response, e: any, label = ""): void {
+  console.error(`[serverError${label ? " " + label : ""}]`, e?.message || e);
+  res.status(500).json({ message: "Erreur serveur" });
+}
+
 const SENSITIVE_SETTING_KEYS = new Set([
   "sendavapayWebhookSecret",
   "omnipayCallbackKey",
@@ -252,7 +258,7 @@ export async function registerRoutes(
       if (error instanceof z.ZodError) {
         return res.status(400).json({ message: error.errors[0].message });
       }
-      res.status(500).json({ message: error.message || "Erreur serveur" });
+      serverError(res, error);
     }
   });
 
@@ -286,7 +292,7 @@ export async function registerRoutes(
       if (error instanceof z.ZodError) {
         return res.status(400).json({ message: error.errors[0].message });
       }
-      res.status(500).json({ message: error.message || "Erreur serveur" });
+      serverError(res, error);
     }
   });
 
@@ -334,7 +340,7 @@ export async function registerRoutes(
 
       res.json({ success: true, message: "Mot de passe modifie avec succes" });
     } catch (error: any) {
-      res.status(500).json({ message: error.message || "Erreur serveur" });
+      serverError(res, error);
     }
   });
 
@@ -354,7 +360,7 @@ export async function registerRoutes(
       const updated = await storage.updateUser(user.id, update);
       res.json({ user: safeUser(updated) });
     } catch (e: any) {
-      res.status(500).json({ message: e.message || "Erreur serveur" });
+      serverError(res, e);
     }
   });
 
@@ -386,7 +392,7 @@ export async function registerRoutes(
 
       res.json(productsWithOwnership);
     } catch (error: any) {
-      res.status(500).json({ message: error.message });
+      serverError(res, error);
     }
   });
 
@@ -467,7 +473,7 @@ export async function registerRoutes(
       
       res.json(formattedProducts);
     } catch (error: any) {
-      res.status(500).json({ message: error.message });
+      serverError(res, error);
     }
   });
 
@@ -561,7 +567,7 @@ export async function registerRoutes(
       });
     } catch (error: any) {
       console.error("Collect earnings error:", error);
-      res.status(500).json({ message: error.message });
+      serverError(res, error);
     }
   });
 
@@ -605,7 +611,7 @@ export async function registerRoutes(
 
       res.json([...virtualChannels, ...manualChannels]);
     } catch (error: any) {
-      res.status(500).json({ message: error.message });
+      serverError(res, error);
     }
   });
 
@@ -621,7 +627,7 @@ export async function registerRoutes(
         enabledCountries: soleaspayCountries,
       });
     } catch (error: any) {
-      res.status(500).json({ message: error.message });
+      serverError(res, error);
     }
   });
 
@@ -631,7 +637,7 @@ export async function registerRoutes(
       const all = await storage.getActiveStakingProducts();
       res.json(all);
     } catch (error: any) {
-      res.status(500).json({ message: error.message });
+      serverError(res, error);
     }
   });
 
@@ -650,7 +656,7 @@ export async function registerRoutes(
       const stakings = await storage.getUserStakings(req.session.userId!);
       res.json(stakings);
     } catch (error: any) {
-      res.status(500).json({ message: error.message });
+      serverError(res, error);
     }
   });
 
@@ -660,7 +666,7 @@ export async function registerRoutes(
       const all = await storage.getStakingProducts();
       res.json(all);
     } catch (error: any) {
-      res.status(500).json({ message: error.message });
+      serverError(res, error);
     }
   });
 
@@ -718,7 +724,7 @@ export async function registerRoutes(
       const all = await storage.getAllUserStakings();
       res.json(all);
     } catch (error: any) {
-      res.status(500).json({ message: error.message });
+      serverError(res, error);
     }
   });
 
@@ -733,7 +739,7 @@ export async function registerRoutes(
       const nums = await storage.getPaymentNumbers();
       res.json(nums.filter(n => n.isActive));
     } catch (error: any) {
-      res.status(500).json({ message: error.message });
+      serverError(res, error);
     }
   });
 
@@ -743,7 +749,7 @@ export async function registerRoutes(
       const nums = await storage.getPaymentNumbers();
       res.json(nums);
     } catch (error: any) {
-      res.status(500).json({ message: error.message });
+      serverError(res, error);
     }
   });
 
@@ -983,7 +989,7 @@ export async function registerRoutes(
 
       return res.json({ status: deposit.status });
     } catch (error: any) {
-      res.status(500).json({ message: error.message });
+      serverError(res, error);
     }
   });
 
@@ -992,7 +998,7 @@ export async function registerRoutes(
       const deposits = await storage.getUserDeposits(req.session.userId!);
       res.json(deposits);
     } catch (error: any) {
-      res.status(500).json({ message: error.message });
+      serverError(res, error);
     }
   });
 
@@ -1008,7 +1014,7 @@ export async function registerRoutes(
       const data = await r.json();
       res.json(data);
     } catch (error: any) {
-      res.status(500).json({ success: false, message: error.message });
+      serverError(res, error); // success:false handled by serverError
     }
   });
 
@@ -1076,7 +1082,7 @@ export async function registerRoutes(
       });
     } catch (error: any) {
       console.error("[sendavapay] create error:", error);
-      res.status(500).json({ message: error.message || "Erreur serveur" });
+      serverError(res, error);
     }
   });
 
@@ -1107,7 +1113,7 @@ export async function registerRoutes(
       res.json(result);
     } catch (error: any) {
       console.error("[sendavapay] initiate error:", error);
-      res.status(500).json({ message: error.message || "Erreur serveur" });
+      serverError(res, error);
     }
   });
 
@@ -1122,7 +1128,7 @@ export async function registerRoutes(
       res.json(result);
     } catch (error: any) {
       console.error("[sendavapay] submit-otp error:", error);
-      res.status(500).json({ message: error.message || "Erreur serveur" });
+      serverError(res, error);
     }
   });
 
@@ -1141,7 +1147,7 @@ export async function registerRoutes(
       res.json(result);
     } catch (error: any) {
       console.error("[sendavapay] retry error:", error);
-      res.status(500).json({ message: error.message || "Erreur serveur" });
+      serverError(res, error);
     }
   });
 
@@ -1198,7 +1204,7 @@ export async function registerRoutes(
       res.json({ status: newStatus || deposit.status, rawStatus: statusData.data.status });
     } catch (error: any) {
       console.error("[sendavapay] status check error:", error);
-      res.status(500).json({ message: error.message });
+      serverError(res, error);
     }
   });
 
@@ -1259,7 +1265,7 @@ export async function registerRoutes(
         res.json({ received: true });
       } catch (error: any) {
         console.error("[sendavapay webhook] error:", error);
-        res.status(500).json({ message: error.message });
+        serverError(res, error);
       }
     }
   );
@@ -1373,7 +1379,7 @@ export async function registerRoutes(
       const withdrawals = await storage.getUserWithdrawals(req.session.userId!);
       res.json(withdrawals);
     } catch (error: any) {
-      res.status(500).json({ message: error.message });
+      serverError(res, error);
     }
   });
 
@@ -1383,7 +1389,7 @@ export async function registerRoutes(
       const wallets = await storage.getWallets(req.session.userId!);
       res.json(wallets);
     } catch (error: any) {
-      res.status(500).json({ message: error.message });
+      serverError(res, error);
     }
   });
 
@@ -1427,7 +1433,7 @@ export async function registerRoutes(
       const stats = await storage.getTeamStats(req.session.userId!);
       res.json(stats);
     } catch (error: any) {
-      res.status(500).json({ message: error.message });
+      serverError(res, error);
     }
   });
 
@@ -1436,7 +1442,7 @@ export async function registerRoutes(
       const team = await storage.getDetailedTeam(req.session.userId!);
       res.json(team);
     } catch (error: any) {
-      res.status(500).json({ message: error.message });
+      serverError(res, error);
     }
   });
 
@@ -1446,7 +1452,7 @@ export async function registerRoutes(
       const tasks = await storage.getTasksWithStatus(req.session.userId!);
       res.json(tasks);
     } catch (error: any) {
-      res.status(500).json({ message: error.message });
+      serverError(res, error);
     }
   });
 
@@ -1499,7 +1505,7 @@ export async function registerRoutes(
 
       res.json({ success: true, message: "Bonus de 50 FCFA ajoute!" });
     } catch (error: any) {
-      res.status(500).json({ message: error.message });
+      serverError(res, error);
     }
   });
 
@@ -1535,7 +1541,7 @@ export async function registerRoutes(
 
       res.json({ canClaim, hoursRemaining, totalBonusClaimed, daysPointed });
     } catch (error: any) {
-      res.status(500).json({ message: error.message });
+      serverError(res, error);
     }
   });
 
@@ -1545,7 +1551,7 @@ export async function registerRoutes(
       const transactions = await storage.getUserTransactions(req.session.userId!);
       res.json(transactions);
     } catch (error: any) {
-      res.status(500).json({ message: error.message });
+      serverError(res, error);
     }
   });
 
@@ -1555,7 +1561,7 @@ export async function registerRoutes(
       const settings = await storage.getSettings();
       res.json(publicSettings(settings));
     } catch (error: any) {
-      res.status(500).json({ message: error.message });
+      serverError(res, error);
     }
   });
 
@@ -1583,7 +1589,7 @@ export async function registerRoutes(
         withdrawalEndHour: settings.withdrawalEndHour || "17",
       });
     } catch (error: any) {
-      res.status(500).json({ message: error.message });
+      serverError(res, error);
     }
   });
 
@@ -1598,7 +1604,7 @@ export async function registerRoutes(
         minWithdrawal: parseInt(settings.minWithdrawal || "1000"),
       });
     } catch (error: any) {
-      res.status(500).json({ message: error.message });
+      serverError(res, error);
     }
   });
 
@@ -1610,7 +1616,7 @@ export async function registerRoutes(
       const stats = await storage.getStats(startDate, endDate);
       res.json(stats);
     } catch (error: any) {
-      res.status(500).json({ message: error.message });
+      serverError(res, error);
     }
   });
 
@@ -1621,7 +1627,7 @@ export async function registerRoutes(
       const filtered = status === "all" ? deposits : deposits.filter(d => d.status === status);
       res.json(filtered);
     } catch (error: any) {
-      res.status(500).json({ message: error.message });
+      serverError(res, error);
     }
   });
 
@@ -1653,7 +1659,7 @@ export async function registerRoutes(
         countPending,
       });
     } catch (error: any) {
-      res.status(500).json({ message: error.message });
+      serverError(res, error);
     }
   });
 
@@ -1747,7 +1753,7 @@ export async function registerRoutes(
       const filtered = status === "all" ? withdrawals : withdrawals.filter(w => w.status === status);
       res.json(filtered);
     } catch (error: any) {
-      res.status(500).json({ message: error.message });
+      serverError(res, error);
     }
   });
 
@@ -1835,7 +1841,7 @@ export async function registerRoutes(
 
       res.json({ eligible, unlocked: false, days: Math.min(streak, 2), needed: 2 });
     } catch (e: any) {
-      res.status(500).json({ message: e.message });
+      serverError(res, e);
     }
   });
 
@@ -1851,7 +1857,7 @@ export async function registerRoutes(
         `Retrait ${newVal ? "débloqué" : "re-bloqué"} pour user ${userId}`);
       res.json({ withdrawalUnlocked: newVal });
     } catch (e: any) {
-      res.status(500).json({ message: e.message });
+      serverError(res, e);
     }
   });
 
@@ -1869,7 +1875,7 @@ export async function registerRoutes(
       }));
       res.json({ users: usersWithTeam, total, page, limit, totalPages: Math.ceil(total / limit) });
     } catch (error: any) {
-      res.status(500).json({ message: error.message });
+      serverError(res, error);
     }
   });
 
@@ -1890,7 +1896,7 @@ export async function registerRoutes(
       );
       res.json(rows.rows);
     } catch (e: any) {
-      res.status(500).json({ message: e.message });
+      serverError(res, e);
     }
   });
 
@@ -1906,7 +1912,7 @@ export async function registerRoutes(
       await storage.logAdminAction(req.session.userId!, "plan_b_add", uid, `Utilisateur ${uid} ajouté au Plan B`);
       res.json(entry);
     } catch (e: any) {
-      res.status(500).json({ message: e.message });
+      serverError(res, e);
     }
   });
 
@@ -1918,7 +1924,7 @@ export async function registerRoutes(
       await storage.logAdminAction(req.session.userId!, "plan_b_remove", uid, `Utilisateur ${uid} retiré du Plan B`);
       res.json({ message: "Utilisateur retiré du Plan B" });
     } catch (e: any) {
-      res.status(500).json({ message: e.message });
+      serverError(res, e);
     }
   });
 
@@ -1934,7 +1940,7 @@ export async function registerRoutes(
         `Match ${id} isVipOnly → ${newVal}`);
       res.json({ id, isVipOnly: newVal });
     } catch (e: any) {
-      res.status(500).json({ message: e.message });
+      serverError(res, e);
     }
   });
 
@@ -1946,7 +1952,7 @@ export async function registerRoutes(
         .orderBy(descOp(matches.matchDate));
       res.json(rows);
     } catch (e: any) {
-      res.status(500).json({ message: e.message });
+      serverError(res, e);
     }
   });
 
@@ -1956,7 +1962,7 @@ export async function registerRoutes(
       const team = await storage.getDetailedTeam(userId);
       res.json(team);
     } catch (error: any) {
-      res.status(500).json({ message: error.message });
+      serverError(res, error);
     }
   });
 
@@ -2071,7 +2077,7 @@ export async function registerRoutes(
       const allProducts = await storage.getProducts();
       res.json(allProducts);
     } catch (error: any) {
-      res.status(500).json({ message: error.message });
+      serverError(res, error);
     }
   });
 
@@ -2091,7 +2097,7 @@ export async function registerRoutes(
         totalCycle: up.product.cycleDays,
       })));
     } catch (error: any) {
-      res.status(500).json({ message: error.message });
+      serverError(res, error);
     }
   });
 
@@ -2148,7 +2154,7 @@ export async function registerRoutes(
       const channels = await storage.getPaymentChannels();
       res.json(channels);
     } catch (error: any) {
-      res.status(500).json({ message: error.message });
+      serverError(res, error);
     }
   });
 
@@ -2193,7 +2199,7 @@ export async function registerRoutes(
       const settings = await storage.getSettings();
       res.json(adminSettings(settings));
     } catch (error: any) {
-      res.status(500).json({ message: error.message });
+      serverError(res, error);
     }
   });
 
@@ -2339,7 +2345,7 @@ export async function registerRoutes(
       const activeCountries = await storage.getActiveCountries();
       res.json(activeCountries);
     } catch (error: any) {
-      res.status(500).json({ message: error.message });
+      serverError(res, error);
     }
   });
 
@@ -2349,7 +2355,7 @@ export async function registerRoutes(
       const allCountries = await storage.getCountries();
       res.json(allCountries);
     } catch (error: any) {
-      res.status(500).json({ message: error.message });
+      serverError(res, error);
     }
   });
 
@@ -2408,7 +2414,7 @@ export async function registerRoutes(
       const deposits = await storage.getDeposits();
       res.json(deposits);
     } catch (error: any) {
-      res.status(500).json({ message: error.message });
+      serverError(res, error);
     }
   });
 
@@ -2417,7 +2423,7 @@ export async function registerRoutes(
       const withdrawals = await storage.getWithdrawals();
       res.json(withdrawals);
     } catch (error: any) {
-      res.status(500).json({ message: error.message });
+      serverError(res, error);
     }
   });
 
@@ -2522,7 +2528,7 @@ export async function registerRoutes(
       const filtered = rows.filter((m: any) => !m.isVipOnly || isPlanB);
       res.json(filtered);
     } catch (e: any) {
-      res.status(500).json({ message: e.message });
+      serverError(res, e);
     }
   });
 
@@ -2538,7 +2544,7 @@ export async function registerRoutes(
         .reduce((s, b) => s + parseFloat(b.amount), 0);
       res.json({ pendingAmount, totalVolume });
     } catch (e: any) {
-      res.status(500).json({ message: e.message });
+      serverError(res, e);
     }
   });
 
@@ -2548,7 +2554,7 @@ export async function registerRoutes(
       const [entry] = await db.select().from(planBUsers).where(eqOp(planBUsers.userId, userId));
       res.json({ isPlanB: !!entry });
     } catch (e: any) {
-      res.status(500).json({ message: e.message });
+      serverError(res, e);
     }
   });
 
@@ -2620,7 +2626,7 @@ export async function registerRoutes(
         .orderBy(descOp(bets.placedAt));
       res.json(rows);
     } catch (e: any) {
-      res.status(500).json({ message: e.message });
+      serverError(res, e);
     }
   });
 
@@ -2633,7 +2639,7 @@ export async function registerRoutes(
       const all = await db.select().from(matches).orderBy(descOp(matches.matchDate));
       res.json(all);
     } catch (e: any) {
-      res.status(500).json({ message: e.message });
+      serverError(res, e);
     }
   });
 
@@ -2703,7 +2709,7 @@ export async function registerRoutes(
 
       res.json({ matchStats, featuredSummary, otherSummary, todayFeatured, todayOther });
     } catch (e: any) {
-      res.status(500).json({ message: e.message });
+      serverError(res, e);
     }
   });
 
@@ -2719,26 +2725,16 @@ export async function registerRoutes(
       for (const f of fixtures) {
         if (!f.externalId) { skipped++; continue; }
 
-        // Check duplicate by external_id
-        const existing = await db.execute(
-          `SELECT id FROM matches WHERE external_id = $1 LIMIT 1`,
-          // @ts-ignore raw query
-        ).catch(() => null);
-
-        // Use raw SQL to avoid TS issues with new columns not yet in Drizzle inferred type
-        const rows = await db.execute(
-          // @ts-ignore
-          `SELECT id FROM matches WHERE external_id = '${f.externalId.replace(/'/g, "''")}' LIMIT 1`
-        );
-        const already = (rows as any)?.rows?.length > 0 || (rows as any)?.length > 0;
+        // Parameterized duplicate check — no string interpolation
+        const dupRows = await db.execute(sql`SELECT id FROM matches WHERE external_id = ${String(f.externalId)} LIMIT 1`);
+        const already = (dupRows as any)?.rows?.length > 0 || (Array.isArray(dupRows) && dupRows.length > 0);
         if (already) { skipped++; continue; }
 
-        // Use raw SQL to avoid Drizzle column-count mismatch with schema vs actual DB
-        await db.execute(
-          // @ts-ignore
-          `INSERT INTO matches (home_team, away_team, home_flag, away_flag, predicted_score, profit_rate, match_date, league, external_id, created_by)
-           VALUES ('${f.homeTeam.replace(/'/g,"''")}', '${f.awayTeam.replace(/'/g,"''")}', '${(f.homeFlag||"🏴").replace(/'/g,"''")}', '${(f.awayFlag||"🏴").replace(/'/g,"''")}', '0-0', '7.5', '${f.matchDate.toISOString()}', '${(f.league||"").replace(/'/g,"''")}', '${String(f.externalId).replace(/'/g,"''")}', ${req.session.userId ?? "NULL"})`
-        );
+        // Parameterized INSERT — no string interpolation
+        await db.execute(sql`
+          INSERT INTO matches (home_team, away_team, home_flag, away_flag, predicted_score, profit_rate, match_date, league, external_id, created_by)
+          VALUES (${f.homeTeam}, ${f.awayTeam}, ${f.homeFlag || "🏴"}, ${f.awayFlag || "🏴"}, '0-0', '7.5', ${f.matchDate.toISOString()}, ${f.league || ""}, ${String(f.externalId)}, ${req.session.userId ?? null})
+        `);
         imported++;
       }
 
@@ -2748,7 +2744,7 @@ export async function registerRoutes(
       res.json({ message: `${imported} match(s) importé(s), ${skipped} ignoré(s)`, imported, skipped, total: fixtures.length });
     } catch (e: any) {
       console.error("[sync_matches]", e);
-      res.status(500).json({ message: e.message });
+      serverError(res, e);
     }
   });
 
@@ -2875,7 +2871,7 @@ export async function registerRoutes(
       await storage.logAdminAction(req.session.userId!, "settle_match", null, `Match ${id} réglé: ${matchResult}, ${settled} pari(s) traité(s), score réel: ${realScore}`);
       res.json({ message: `Match réglé (${matchResult}). ${settled} pari(s) traité(s).`, result: matchResult });
     } catch (e: any) {
-      res.status(500).json({ message: e.message });
+      serverError(res, e);
     }
   });
 
@@ -3041,23 +3037,17 @@ export async function registerRoutes(
 
       for (const f of fixtures) {
         if (!f.externalId) { skipped++; continue; }
-        const rows = await db.execute(
-          // @ts-ignore
-          `SELECT id FROM matches WHERE external_id = '${f.externalId.replace(/'/g, "''")}' LIMIT 1`
-        );
-        const already = (rows as any)?.rows?.length > 0 || (Array.isArray(rows) && rows.length > 0);
+        // Parameterized duplicate check
+        const dupRows = await db.execute(sql`SELECT id FROM matches WHERE external_id = ${String(f.externalId)} LIMIT 1`);
+        const already = (dupRows as any)?.rows?.length > 0 || (Array.isArray(dupRows) && dupRows.length > 0);
         if (already) { skipped++; continue; }
 
-        await db.execute(
-          // @ts-ignore
-          `INSERT INTO matches (home_team, away_team, home_flag, away_flag, predicted_score,
-             profit_rate, match_date, league, external_id, is_active, created_at)
-           VALUES ('${f.homeTeam.replace(/'/g,"''")}', '${f.awayTeam.replace(/'/g,"''")}',
-             '${(f.homeFlag||"🏴").replace(/'/g,"''")}', '${(f.awayFlag||"🏴").replace(/'/g,"''")}',
-             '0-0', '7.5', '${f.matchDate.toISOString()}',
-             '${(f.league||"").replace(/'/g,"''")}', '${f.externalId}', true, NOW())
-           ON CONFLICT DO NOTHING`
-        );
+        // Parameterized INSERT
+        await db.execute(sql`
+          INSERT INTO matches (home_team, away_team, home_flag, away_flag, predicted_score, profit_rate, match_date, league, external_id, is_active, created_at)
+          VALUES (${f.homeTeam}, ${f.awayTeam}, ${f.homeFlag || "🏴"}, ${f.awayFlag || "🏴"}, '0-0', '7.5', ${f.matchDate.toISOString()}, ${f.league || ""}, ${String(f.externalId)}, true, NOW())
+          ON CONFLICT DO NOTHING
+        `);
         imported++;
       }
       console.log(`[midnightSync] Terminé: ${imported} importé(s), ${skipped} ignoré(s)`);
