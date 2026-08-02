@@ -5,7 +5,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { getCountryByCode } from "@/lib/countries";
-import { Loader2, ChevronRight, Shield, Info, Pencil, CreditCard, HeadphonesIcon, Lock, FolderOpen, BookOpen } from "lucide-react";
+import { Loader2, ChevronRight, Shield } from "lucide-react";
 import satwinLogo from "@assets/satwin-logo.jpg";
 
 const GREEN = "#3d9e4e";
@@ -173,58 +173,46 @@ export default function AccountPage() {
         <MenuItem
           label="Sécurité"
           onClick={() => navigate("/change-password")}
-          icon={<Lock size={16} color="#3d9e4e" />}
-          iconBg="rgba(61,158,78,0.12)"
         />
 
-        <div style={{ height: 1, background: "#f0f0f0", marginLeft: 56 }} />
+        <div style={{ height: 1, background: "#f0f0f0", marginLeft: 16 }} />
 
         {/* Infos */}
         <MenuItem
           label="Infos"
           onClick={() => navigate("/infos")}
-          icon={<Info size={16} color="#3b82f6" />}
-          iconBg="rgba(59,130,246,0.12)"
         />
 
-        <div style={{ height: 1, background: "#f0f0f0", marginLeft: 56 }} />
+        <div style={{ height: 1, background: "#f0f0f0", marginLeft: 16 }} />
 
         {/* Dossiers */}
         <MenuItem
           label="Dossiers"
           onClick={() => navigate("/history")}
-          icon={<FolderOpen size={16} color="#f59e0b" />}
-          iconBg="rgba(245,158,11,0.12)"
         />
 
-        <div style={{ height: 1, background: "#f0f0f0", marginLeft: 56 }} />
+        <div style={{ height: 1, background: "#f0f0f0", marginLeft: 16 }} />
 
         {/* Ajouter une carte */}
         <MenuItem
           label="Ajouter une carte"
           onClick={() => navigate("/wallet")}
-          icon={<CreditCard size={16} color="#8b5cf6" />}
-          iconBg="rgba(139,92,246,0.12)"
         />
 
-        <div style={{ height: 1, background: "#f0f0f0", marginLeft: 56 }} />
+        <div style={{ height: 1, background: "#f0f0f0", marginLeft: 16 }} />
 
         {/* Histoire */}
         <MenuItem
           label="Histoire"
           onClick={() => navigate("/about")}
-          icon={<BookOpen size={16} color="#06b6d4" />}
-          iconBg="rgba(6,182,212,0.12)"
         />
 
-        <div style={{ height: 1, background: "#f0f0f0", marginLeft: 56 }} />
+        <div style={{ height: 1, background: "#f0f0f0", marginLeft: 16 }} />
 
         {/* CS */}
         <MenuItem
           label="CS"
           onClick={() => navigate("/service")}
-          icon={<HeadphonesIcon size={16} color="#ec4899" />}
-          iconBg="rgba(236,72,153,0.12)"
           isLast
         />
       </div>
@@ -293,33 +281,21 @@ export default function AccountPage() {
 function MenuItem({
   label,
   onClick,
-  icon,
-  iconBg,
   rightExtra,
   isLast,
 }: {
   label: string;
   onClick: () => void;
-  icon?: React.ReactNode;
-  iconBg?: string;
   rightExtra?: React.ReactNode;
   isLast?: boolean;
 }) {
   return (
     <button
       onClick={onClick}
-      className="w-full flex items-center px-4 py-3.5 text-left active:bg-gray-50 gap-3"
+      className="w-full flex items-center px-4 py-4 text-left active:bg-gray-50"
     >
-      {icon && (
-        <div
-          className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
-          style={{ background: iconBg || "rgba(61,158,78,0.12)" }}
-        >
-          {icon}
-        </div>
-      )}
       <span className="flex-1 text-gray-800 font-medium text-sm">{label}</span>
-      {rightExtra && <span className="mr-1">{rightExtra}</span>}
+      {rightExtra && <span className="mr-2">{rightExtra}</span>}
       <ChevronRight size={16} color="#bbb" />
     </button>
   );
