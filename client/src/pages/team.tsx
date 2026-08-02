@@ -5,7 +5,7 @@ import { useToast } from "@/hooks/use-toast";
 import { copyToClipboard } from "@/hooks/use-clipboard";
 import { getCountryByCode } from "@/lib/countries";
 import { useLocation } from "wouter";
-import { ChevronRight, Copy, Search, X } from "lucide-react";
+import { ChevronRight, Copy, Search, X, Trophy, Share2, Users, DollarSign, TrendingUp, Gift } from "lucide-react";
 
 const GREEN = "#15803d";
 
@@ -272,7 +272,9 @@ export default function TeamPage() {
         <div style={{ flex: 1, overflowY: "auto", padding: "16px 14px 80px" }}>
           {/* Hero card */}
           <div style={{ background: "linear-gradient(135deg, #15803d, #166534)", borderRadius: 16, padding: "24px 20px", marginBottom: 16, textAlign: "center", boxShadow: "0 8px 24px rgba(21,128,61,0.3)" }}>
-            <div style={{ fontSize: 48, marginBottom: 10 }}>🏆</div>
+            <div style={{ width: 64, height: 64, borderRadius: 20, background: "rgba(255,255,255,0.15)", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 12 }}>
+              <Trophy size={36} color="white" />
+            </div>
             <h2 style={{ color: "white", fontWeight: 900, fontSize: 22, margin: "0 0 8px" }}>Parrainez & Gagnez !</h2>
             <p style={{ color: "rgba(255,255,255,0.85)", fontSize: 14, lineHeight: 1.7, margin: 0 }}>
               Invitez vos amis sur <strong>SATWIN FOOT</strong> et recevez des commissions automatiques sur chaque mise qu'ils placent — sans aucun effort supplémentaire.
@@ -307,13 +309,15 @@ export default function TeamPage() {
               <span style={{ fontWeight: 700, fontSize: 15, color: "#111827" }}>Comment ça marche ?</span>
             </div>
             {[
-              { icon: "📤", step: "Partagez votre code d'invitation", desc: "Envoyez votre lien unique à vos proches via WhatsApp, Telegram ou SMS." },
-              { icon: "👥", step: "Vos amis s'inscrivent", desc: "Ils créent leur compte avec votre code de parrainage et commencent à miser." },
-              { icon: "💰", step: "Vous gagnez automatiquement", desc: `Vous recevez ${lv1Rate}% de chaque mise placée par vos filleuls directs, instantanément sur votre solde.` },
-              { icon: "📈", step: "Revenus exponentiels", desc: "Plus votre réseau grandit, plus vos commissions augmentent. Jusqu'à 3 niveaux de profondeur !" },
+              { icon: <Share2 size={16} color="#15803d" />, bg: "rgba(21,128,61,0.12)", step: "Partagez votre code d'invitation", desc: "Envoyez votre lien unique à vos proches via WhatsApp, Telegram ou SMS." },
+              { icon: <Users size={16} color="#3b82f6" />, bg: "rgba(59,130,246,0.12)", step: "Vos amis s'inscrivent", desc: "Ils créent leur compte avec votre code de parrainage et commencent à miser." },
+              { icon: <DollarSign size={16} color="#f59e0b" />, bg: "rgba(245,158,11,0.12)", step: "Vous gagnez automatiquement", desc: `Vous recevez ${lv1Rate}% de chaque mise placée par vos filleuls directs, instantanément sur votre solde.` },
+              { icon: <TrendingUp size={16} color="#8b5cf6" />, bg: "rgba(139,92,246,0.12)", step: "Revenus exponentiels", desc: "Plus votre réseau grandit, plus vos commissions augmentent. Jusqu'à 3 niveaux de profondeur !" },
             ].map((s, i) => (
-              <div key={i} style={{ display: "flex", gap: 12, padding: "10px 0", borderBottom: i < 3 ? "1px solid #f9fafb" : "none" }}>
-                <span style={{ fontSize: 24, flexShrink: 0 }}>{s.icon}</span>
+              <div key={i} style={{ display: "flex", gap: 12, padding: "10px 0", borderBottom: i < 3 ? "1px solid #f9fafb" : "none", alignItems: "flex-start" }}>
+                <div style={{ width: 34, height: 34, borderRadius: 10, background: s.bg, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, marginTop: 2 }}>
+                  {s.icon}
+                </div>
                 <div>
                   <p style={{ fontWeight: 700, fontSize: 13, color: "#111827", margin: "0 0 3px" }}>{s.step}</p>
                   <p style={{ fontSize: 12, color: "#6b7280", lineHeight: 1.6, margin: 0 }}>{s.desc}</p>
@@ -496,7 +500,9 @@ export default function TeamPage() {
       <div style={{ minHeight: "100vh", background: "#f5f5f5", display: "flex", flexDirection: "column" }}>
         <SubHeader title="Prime promotionnelle" onBack={() => setView("main")} />
         <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 32, textAlign: "center" }}>
-          <div style={{ fontSize: 56, marginBottom: 14 }}>🎁</div>
+          <div style={{ width: 80, height: 80, borderRadius: 24, background: "linear-gradient(135deg, #15803d, #166534)", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 18, boxShadow: "0 8px 24px rgba(21,128,61,0.3)" }}>
+            <Gift size={40} color="white" />
+          </div>
           <p style={{ fontWeight: 700, fontSize: 18, color: "#111827", marginBottom: 8 }}>Prime promotionnelle</p>
           <p style={{ color: "#6b7280", fontSize: 14, lineHeight: 1.7 }}>Aucune prime promotionnelle active pour le moment. Invitez des amis pour débloquer des bonus exclusifs !</p>
         </div>
