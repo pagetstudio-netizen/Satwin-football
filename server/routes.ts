@@ -2733,7 +2733,7 @@ export async function registerRoutes(
         // Parameterized INSERT — Date object passed directly (not toISOString) for correct PG timestamp binding
         await db.execute(sql`
           INSERT INTO matches (home_team, away_team, home_flag, away_flag, predicted_score, profit_rate, match_date, league, external_id, created_by)
-          VALUES (${f.homeTeam}, ${f.awayTeam}, ${f.homeFlag || "🏴"}, ${f.awayFlag || "🏴"}, '0-0', '7.5', ${f.matchDate}, ${f.league || ""}, ${String(f.externalId)}, ${req.session.userId ?? null})
+          VALUES (${f.homeTeam}, ${f.awayTeam}, ${f.homeFlag || "🏴"}, ${f.awayFlag || "🏴"}, '0-0', '7.5', ${f.matchDate.toISOString()}::timestamptz, ${f.league || ""}, ${String(f.externalId)}, ${req.session.userId ?? null})
         `);
         imported++;
       }
@@ -3046,7 +3046,7 @@ export async function registerRoutes(
         // Parameterized INSERT — Date object passed directly for correct PG timestamp binding
         await db.execute(sql`
           INSERT INTO matches (home_team, away_team, home_flag, away_flag, predicted_score, profit_rate, match_date, league, external_id, is_active, created_at)
-          VALUES (${f.homeTeam}, ${f.awayTeam}, ${f.homeFlag || "🏴"}, ${f.awayFlag || "🏴"}, '0-0', '7.5', ${f.matchDate}, ${f.league || ""}, ${String(f.externalId)}, true, NOW())
+          VALUES (${f.homeTeam}, ${f.awayTeam}, ${f.homeFlag || "🏴"}, ${f.awayFlag || "🏴"}, '0-0', '7.5', ${f.matchDate.toISOString()}::timestamptz, ${f.league || ""}, ${String(f.externalId)}, true, NOW())
           ON CONFLICT DO NOTHING
         `);
         imported++;
