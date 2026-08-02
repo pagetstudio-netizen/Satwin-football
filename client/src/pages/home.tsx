@@ -46,15 +46,16 @@ function HeroCarousel() {
         willChange: "transform",
       }}>
         {SLIDES.map((src, i) => (
-          <div key={i} style={{ minWidth: "100%", position: "relative" }}>
+          <div key={i} style={{ minWidth: "100%", height: 190, position: "relative", overflow: "hidden" }}>
             <img
               src={src}
               alt={`Slide ${i + 1}`}
               style={{
                 width: "100%",
+                height: "100%",
                 display: "block",
                 objectFit: "cover",
-                borderRadius: 14,
+                objectPosition: "center",
               }}
             />
           </div>
