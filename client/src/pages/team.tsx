@@ -5,7 +5,7 @@ import { useToast } from "@/hooks/use-toast";
 import { copyToClipboard } from "@/hooks/use-clipboard";
 import { getCountryByCode } from "@/lib/countries";
 import { useLocation } from "wouter";
-import { ChevronRight, Copy, Search, X, Trophy, Share2, Users, DollarSign, TrendingUp, Gift } from "lucide-react";
+import { ChevronRight, Copy, Search, X, Trophy, Share2, Users, DollarSign, TrendingUp, Gift, FolderOpen, QrCode, BarChart2 } from "lucide-react";
 
 const GREEN = "#15803d";
 
@@ -511,11 +511,11 @@ export default function TeamPage() {
   }
 
   /* ══ MAIN VIEW: Centre d'agence ══ */
-  const iconBtns: { img: string; filter: string; label: string; to: View }[] = [
-    { img: "/icons/team.png",     filter: "grayscale(100%) brightness(0.55)",                      label: "Mon équipe",        to: "mon_equipe" },
-    { img: "/icons/rapport.png",  filter: "brightness(0) opacity(0.55)",                           label: "Rapport",           to: "rapport"    },
-    { img: "/icons/dossiers.png", filter: "invert(1) grayscale(100%) brightness(0) opacity(0.55)", label: "Dossiers",          to: "dossiers"   },
-    { img: "/icons/code.png",     filter: "grayscale(100%) brightness(0.55)",                      label: "Code\nd'invitation", to: "code"       },
+  const iconBtns: { icon: React.ReactNode; label: string; to: View }[] = [
+    { icon: <Users size={26} color={GREEN} />,      label: "Mon équipe",        to: "mon_equipe" },
+    { icon: <BarChart2 size={26} color={GREEN} />,  label: "Rapport",           to: "rapport"    },
+    { icon: <FolderOpen size={26} color={GREEN} />, label: "Dossiers",          to: "dossiers"   },
+    { icon: <QrCode size={26} color={GREEN} />,     label: "Code\nd'invitation", to: "code"       },
   ];
 
   const listItems: { label: string; to: View }[] = [
@@ -566,8 +566,8 @@ export default function TeamPage() {
                 onClick={() => btn.to === "rapport" ? navigate("/about" as any) : setView(btn.to)}
                 style={{ background: "none", border: "none", cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", gap: 6, padding: "4px 8px" }}
               >
-                <div style={{ width: 48, height: 48, background: "#f3f4f6", borderRadius: 12, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                  <img src={btn.img} alt={btn.label} style={{ width: 28, height: 28, objectFit: "contain", filter: btn.filter }} />
+                <div style={{ width: 48, height: 48, background: "rgba(21,128,61,0.08)", borderRadius: 12, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  {btn.icon}
                 </div>
                 <span style={{ fontSize: 11, color: "#374151", fontWeight: 600, textAlign: "center", whiteSpace: "pre-line", lineHeight: 1.3 }}>{btn.label}</span>
               </button>
