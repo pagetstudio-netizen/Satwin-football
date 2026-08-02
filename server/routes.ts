@@ -2895,11 +2895,18 @@ export async function registerRoutes(
         const already = (dupRows as any)?.rows?.length > 0 || (Array.isArray(dupRows) && dupRows.length > 0);
         if (already) { skipped++; continue; }
 
-        // Parameterized INSERT — Date object passed directly (not toISOString) for correct PG timestamp binding
-        await db.execute(sql`
-          INSERT INTO matches (home_team, away_team, home_flag, away_flag, predicted_score, profit_rate, match_date, league, external_id, created_by)
-          VALUES (${f.homeTeam}, ${f.awayTeam}, ${f.homeFlag || "🏴"}, ${f.awayFlag || "🏴"}, '0-0', '7.5', ${f.matchDate.toISOString()}::timestamptz, ${f.league || ""}, ${String(f.externalId)}, ${req.session.userId ?? null})
-        `);
+        await db.insert(matches).values({
+          homeTeam:       f.homeTeam,
+          awayTeam:       f.awayTeam,
+          homeFlag:       f.homeFlag || "🏴",
+          awayFlag:       f.awayFlag || "🏴",
+          predictedScore: "0-0",
+          profitRate:     "7.5",
+          matchDate:      new Date(f.matchDate),
+          league:         f.league || "",
+          externalId:     String(f.externalId),
+          createdBy:      req.session.userId ?? null,
+        });
         imported++;
       }
 
@@ -3208,12 +3215,17 @@ export async function registerRoutes(
         const already = (dupRows as any)?.rows?.length > 0 || (Array.isArray(dupRows) && dupRows.length > 0);
         if (already) { skipped++; continue; }
 
-        // Parameterized INSERT — Date object passed directly for correct PG timestamp binding
-        await db.execute(sql`
-          INSERT INTO matches (home_team, away_team, home_flag, away_flag, predicted_score, profit_rate, match_date, league, external_id, is_active, created_at)
-          VALUES (${f.homeTeam}, ${f.awayTeam}, ${f.homeFlag || "🏴"}, ${f.awayFlag || "🏴"}, '0-0', '7.5', ${f.matchDate.toISOString()}::timestamptz, ${f.league || ""}, ${String(f.externalId)}, true, NOW())
-          ON CONFLICT DO NOTHING
-        `);
+        await db.insert(matches).values({
+          homeTeam:       f.homeTeam,
+          awayTeam:       f.awayTeam,
+          homeFlag:       f.homeFlag || "🏴",
+          awayFlag:       f.awayFlag || "🏴",
+          predictedScore: "0-0",
+          profitRate:     "7.5",
+          matchDate:      new Date(f.matchDate),
+          league:         f.league || "",
+          externalId:     String(f.externalId),
+        });
         imported++;
       }
       console.log(`[midnightSync] Terminé: ${imported} importé(s), ${skipped} ignoré(s)`);
