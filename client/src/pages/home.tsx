@@ -469,7 +469,7 @@ export default function HomePage() {
   const [showPopup, setShowPopup] = useState(false);
   useEffect(() => {
     if (!linkSettings) return;
-    if (linkSettings.groupEnabled === false) return;
+    if (!linkSettings.groupLink) return;
     if (sessionStorage.getItem("groupPopupShown")) return;
     sessionStorage.setItem("groupPopupShown", "1");
     setShowPopup(true);
