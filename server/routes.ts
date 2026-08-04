@@ -1041,7 +1041,8 @@ export async function registerRoutes(
       const rawPhone = (payerPhone && payerPhone.trim()) ? payerPhone.trim() : user.phone;
       const customerPhone = sendavapayFormatPhone(rawPhone, country);
       const devDomain = process.env.REPLIT_DEV_DOMAIN;
-      const baseUrl = devDomain ? `https://${devDomain}` : "https://doosan.replit.app";
+      const siteDomain = process.env.SITE_URL; // e.g. https://safwinn.site on Plesk
+      const baseUrl = siteDomain || (devDomain ? `https://${devDomain}` : "https://safwinn.site");
       const webhookUrl = `${baseUrl}/api/webhooks/sendavapay`;
 
       const result = await sendavapayCreate({
