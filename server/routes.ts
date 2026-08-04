@@ -2972,6 +2972,49 @@ export async function registerRoutes(
     }
   });
 
+  // ── Admin: list all bets ──────────────────────────────────────────────────
+  app.get("/api/admin/bets", requireAdmin, async (req, res) => {
+    try {
+      const rows = await db.select({ bet: bets, match: matches })
+        .from(bets)
+        .leftJoin(matches, eqOp(bets.matchId, matches.id))
+        .orderBy(descOp(bets.placedAt))
+        .limit(300);
+
+      // Attach user info
+      const userIds = [...new Set(rows.map(r => r.bet.userId))];
+      const userList = await Promise.all(userIds.map(id => storage.getUser(id)));
+      const userMap = new Map(userList.filter(Boolean).map(u => [u!.id, u!]));
+
+      res.json(rows.map(r => ({
+        ...r.bet,
+        match: r.match,
+        user: userMap.get(r.bet.userId) || null,
+      })));
+    } catch (e) { serverError(res, e); }
+  });
+
+  // ── Admin: refund a single pending bet ────────────────────────────────────
+  app.post("/api/admin/bets/:id/refund", requireAdmin, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const [bet] = await db.select().from(bets).where(eqOp(bets.id, id));
+      if (!bet) return res.status(404).json({ message: "Pari introuvable" });
+      if (bet.status !== "pending") return res.status(400).json({ message: "Seuls les paris en attente peuvent être remboursés" });
+
+      await db.update(bets).set({ status: "refunded", profit: "0", settledAt: new Date() }).where(eqOp(bets.id, id));
+      const u = await storage.getUser(bet.userId);
+      if (u) {
+        const betAmount = parseFloat(bet.amount);
+        await storage.updateUser(bet.userId, { balance: (parseFloat(u.balance) + betAmount).toFixed(2) });
+        await storage.createTransaction({ userId: bet.userId, type: "bet_refund", amount: bet.amount,
+          description: `Remboursement pari #${id} par admin` });
+      }
+      await storage.logAdminAction(req.session.userId!, "refund_bet", null, `Pari #${id} remboursé à user ${bet.userId}`);
+      res.json({ message: "Pari remboursé avec succès" });
+    } catch (e) { serverError(res, e); }
+  });
+
   app.post("/api/admin/matches/:id/settle", requireAdmin, async (req, res) => {
     try {
       const id = parseInt(req.params.id);
