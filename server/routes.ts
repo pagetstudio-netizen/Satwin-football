@@ -3201,6 +3201,131 @@ export async function registerRoutes(
     }
   }
 
+  /* ── Catch-up job: settle matches that finished while server was offline ─────
+   * Runs every 15 min. Finds "upcoming" DB rows whose match_date has passed
+   * 90+ min ago and that still have pending bets. Groups by date → ONE API call
+   * per date (preserves the 100 req/day free-plan quota).
+   */
+  async function runCatchUpSettlement() {
+    try {
+      // Find external_ids of upcoming matches with pending bets, past 90 min
+      const staleRows = (await db.execute(
+        // @ts-ignore
+        `SELECT DISTINCT m.id, m.external_id, m.predicted_score, m.profit_rate,
+                m.home_team, m.away_team, m.is_featured, m.is_vip_only,
+                DATE(m.match_date AT TIME ZONE 'UTC') AS match_day
+         FROM matches m
+         JOIN bets b ON b.match_id = m.id AND b.status = 'pending'
+         WHERE m.status = 'upcoming'
+           AND m.external_id IS NOT NULL
+           AND m.match_date < NOW() - INTERVAL '90 minutes'
+         LIMIT 50`
+      )) as any;
+      const rows: any[] = staleRows?.rows ?? staleRows ?? [];
+      if (rows.length === 0) return;
+
+      console.log(`[catchUp] ${rows.length} match(s) non réglé(s) détecté(s)`);
+
+      // Group by match_day → one API call per date
+      const byDate = new Map<string, typeof rows>();
+      for (const r of rows) {
+        const day = String(r.match_day).slice(0, 10);
+        if (!byDate.has(day)) byDate.set(day, []);
+        byDate.get(day)!.push(r);
+      }
+
+      for (const [dateStr, dayRows] of byDate) {
+        let apiFixtures: any[] = [];
+        try {
+          const json = await (await import("./apiFootball")).fetchUpcomingFixtures(0);
+          // fetchUpcomingFixtures(0) won't work — call apiFetch directly via /fixtures?date=
+          const res2 = await fetch(
+            `https://v3.football.api-sports.io/fixtures?date=${dateStr}&timezone=Africa%2FAbidjan`,
+            { headers: { "x-apisports-key": process.env.API_FOOTBALL_KEY || "" } }
+          );
+          const j2 = await res2.json();
+          apiFixtures = j2.response ?? [];
+        } catch (e) {
+          console.error(`[catchUp] API error for ${dateStr}:`, e);
+          continue;
+        }
+
+        const apiMap = new Map<string, any>(
+          apiFixtures.map((f: any) => [String(f.fixture?.id), f])
+        );
+
+        for (const row of dayRows) {
+          const apiF = apiMap.get(String(row.external_id));
+          if (!apiF) continue;
+
+          const statusShort: string = apiF.fixture?.status?.short ?? "";
+          const finished = ["FT", "AET", "PEN"].includes(statusShort);
+          if (!finished) continue;
+
+          const goalsHome = apiF.goals?.home ?? 0;
+          const goalsAway = apiF.goals?.away ?? 0;
+          const realScore = `${goalsHome}-${goalsAway}`;
+          const scored = realScore.trim() === (row.predicted_score ?? "").trim();
+          const isFeatured = !!row.is_featured;
+          const isVip = !!row.is_vip_only;
+
+          let matchResult: string;
+          if (!scored)              matchResult = "won";
+          else if (isVip || isFeatured) matchResult = "refunded";
+          else                      matchResult = "lost";
+
+          const safeScore  = realScore.replace(/[^0-9\-]/g, "").slice(0, 10);
+          const safeResult = ["won","refunded","lost"].includes(matchResult) ? matchResult : "lost";
+
+          await db.execute(
+            // @ts-ignore
+            `UPDATE matches SET real_score='${safeScore}', result='${safeResult}', status='finished', live_score=NULL WHERE id=${Number(row.id)}`
+          );
+
+          const pendingBets = await db.select().from(bets)
+            .where(andOp(eqOp(bets.matchId, row.id), eqOp(bets.status, "pending")));
+
+          const profitRate = parseFloat(row.profit_rate);
+          for (const bet of pendingBets) {
+            const betAmount = parseFloat(bet.amount);
+            if (matchResult === "won") {
+              const profit = betAmount * profitRate / 100;
+              const total  = betAmount + profit;
+              await db.update(bets).set({ status: "won", profit: profit.toFixed(2), settledAt: new Date() }).where(eqOp(bets.id, bet.id));
+              const u = await storage.getUser(bet.userId);
+              if (u) {
+                await storage.updateUser(bet.userId, {
+                  balance:       (parseFloat(u.balance) + total).toFixed(2),
+                  todayEarnings: (parseFloat(u.todayEarnings) + profit).toFixed(2),
+                  totalEarnings: (parseFloat(u.totalEarnings) + profit).toFixed(2),
+                });
+                await storage.createTransaction({ userId: bet.userId, type: "bet_win", amount: total.toFixed(2),
+                  description: `Gain rattrapage: ${row.home_team} vs ${row.away_team} — ${realScore} ≠ ${row.predicted_score} +${profit.toFixed(0)}F` });
+              }
+            } else if (matchResult === "refunded") {
+              await db.update(bets).set({ status: "refunded", profit: "0", settledAt: new Date() }).where(eqOp(bets.id, bet.id));
+              const u = await storage.getUser(bet.userId);
+              if (u) {
+                await storage.updateUser(bet.userId, { balance: (parseFloat(u.balance) + betAmount).toFixed(2) });
+                await storage.createTransaction({ userId: bet.userId, type: "bet_refund", amount: betAmount.toFixed(2),
+                  description: `Remboursement rattrapage: ${row.home_team} vs ${row.away_team}` });
+              }
+            } else {
+              await db.update(bets).set({ status: "lost", profit: "0", settledAt: new Date() }).where(eqOp(bets.id, bet.id));
+            }
+          }
+          console.log(`[catchUp] Match ${row.id} (${row.home_team} vs ${row.away_team}) réglé en rattrapage: ${matchResult} (${realScore})`);
+        }
+      }
+    } catch (e) {
+      console.error("[catchUp] Erreur:", e);
+    }
+  }
+
+  // Run catch-up every 15 minutes
+  setInterval(runCatchUpSettlement, 15 * 60 * 1000);
+  runCatchUpSettlement(); // once at startup
+
   // ── Midnight auto-sync: import upcoming fixtures every night at 00:00 ──────
   async function runMidnightSync() {
     try {
