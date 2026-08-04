@@ -523,7 +523,8 @@ export default function MatchPage() {
   const isSameDay = (a: Date, b: Date) =>
     a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
 
-  const allMatches = matches || [];
+  // Only show active (upcoming/live) matches — never show finished or cancelled results here
+  const allMatches = (matches || []).filter(m => m.status === "upcoming" || m.status === "live");
 
   const todayMatches = allMatches.filter(m => isSameDay(new Date(m.matchDate), today));
   const tomorrowMatches = allMatches.filter(m => isSameDay(new Date(m.matchDate), tomorrow));

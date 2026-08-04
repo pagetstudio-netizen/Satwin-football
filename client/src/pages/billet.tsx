@@ -299,20 +299,40 @@ export default function BilletPage() {
                   </div>
 
                   {m && (
-                    <div style={{
-                      display: "flex", alignItems: "center", gap: 6,
-                      marginTop: 8, flexWrap: "wrap",
-                    }}>
-                      <span style={{ fontSize: 12, color: "#888" }}>Score</span>
-                      <span style={{ fontSize: 12, color: "#1565c0", fontWeight: 700 }}>
-                        [{score}]
-                      </span>
-                      <span style={{ fontSize: 12, color: "#e53935", fontWeight: 600 }}>
-                        @ {m.profitRate} %
-                      </span>
-                      <span style={{ fontSize: 12, color: "#e53935" }}>
-                        VIP + 0,02 %
-                      </span>
+                    <div style={{ marginTop: 8 }}>
+                      {/* Predicted score row */}
+                      <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                        <span style={{ fontSize: 12, color: "#888" }}>Score</span>
+                        <span style={{ fontSize: 12, color: "#1565c0", fontWeight: 700 }}>
+                          [{score}]
+                        </span>
+                        <span style={{ fontSize: 12, color: "#e53935", fontWeight: 600 }}>
+                          @ {m.profitRate} %
+                        </span>
+                        <span style={{ fontSize: 12, color: "#e53935" }}>
+                          VIP + 0,02 %
+                        </span>
+                      </div>
+                      {/* Real score — only shown after bet is settled */}
+                      {m.realScore && bet.status !== "pending" && (
+                        <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 4 }}>
+                          <span style={{ fontSize: 12, color: "#888" }}>Résultat</span>
+                          <span style={{
+                            fontSize: 13, fontWeight: 800,
+                            color: bet.status === "won" ? "#15803d" : bet.status === "lost" ? "#e53935" : "#f59e0b",
+                          }}>
+                            {m.realScore}
+                          </span>
+                          <span style={{
+                            fontSize: 11, fontWeight: 700,
+                            color: "white",
+                            background: bet.status === "won" ? "#15803d" : bet.status === "lost" ? "#e53935" : "#f59e0b",
+                            borderRadius: 4, padding: "1px 7px",
+                          }}>
+                            {bet.status === "won" ? "GAGNÉ" : bet.status === "lost" ? "PERDU" : "REMBOURSÉ"}
+                          </span>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
