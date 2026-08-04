@@ -184,7 +184,9 @@ function DepotForm({ currency, minDeposit }: { currency: string; minDeposit: num
           <p style={{ color: "#6b7280", fontSize: 12, marginBottom: 20, lineHeight: 1.6 }}>
             Veuillez lire le <span style={{ color: GREEN, textDecoration: "underline" }}>Règles de recharge</span>recharge.readRuleBehind
           </p>
-          <button style={{ width: "100%", background: GREEN, color: "white", border: "none", borderRadius: 8, padding: "15px", fontWeight: 800, fontSize: 16, cursor: "pointer" }}>
+          <button
+            onClick={() => alert("La crypto monnaie sera bientôt disponible")}
+            style={{ width: "100%", background: GREEN, color: "white", border: "none", borderRadius: 8, padding: "15px", fontWeight: 800, fontSize: 16, cursor: "pointer" }}>
             SOUMETTRE
           </button>
         </div>
@@ -260,7 +262,19 @@ function RetraitForm({ balance, currency, minWithdrawal, withdrawalFee, maxWithd
         ))}
       </div>
 
-      <div style={{ padding: "0 14px" }}>
+      {method === "transfert" && (
+        <div style={{ margin: "32px 14px", textAlign: "center", padding: "28px 20px", background: "#f9fafb", borderRadius: 12, border: "1.5px dashed #d1d5db" }}>
+          <div style={{ fontSize: 36, marginBottom: 12 }}>🪙</div>
+          <p style={{ fontWeight: 800, fontSize: 15, color: "#111827", marginBottom: 6 }}>
+            Crypto monnaie (USDT)
+          </p>
+          <p style={{ fontSize: 13, color: "#6b7280", lineHeight: 1.6 }}>
+            La crypto monnaie sera bientôt disponible.
+          </p>
+        </div>
+      )}
+
+      {method === "local" && <div style={{ padding: "0 14px" }}>
 
         {/* Volume d'échange */}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 0", borderBottom: "1px solid #f3f4f6" }}>
@@ -360,7 +374,7 @@ function RetraitForm({ balance, currency, minWithdrawal, withdrawalFee, maxWithd
         }}>
           {withdrawMut.isPending ? "En cours..." : "SOUMETTRE"}
         </button>
-      </div>
+      </div>}
     </div>
   );
 }
