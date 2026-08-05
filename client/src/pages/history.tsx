@@ -138,7 +138,8 @@ function TxRow({ type, label, createdAt, amount, status, details }:{
 export default function HistoryPage() {
   const { user } = useAuth();
   const [, navigate] = useLocation();
-  const [activeTab, setActiveTab] = useState<"deposits"|"withdrawals">("deposits");
+  const initTab = new URLSearchParams(window.location.search).get("tab") === "withdrawals" ? "withdrawals" : "deposits";
+  const [activeTab, setActiveTab] = useState<"deposits"|"withdrawals">(initTab);
 
   const countryInfo = user ? getCountryByCode(user.country) : null;
   const currency = countryInfo?.currency || "FCFA";

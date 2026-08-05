@@ -436,7 +436,7 @@ export default function DepotRetraitPage() {
           <button onClick={() => navigate("/account")} style={{ background: "none", border: "none", cursor: "pointer", color: "white", fontSize: 22, padding: "0 10px 0 0" }}>‹</button>
           <h1 style={{ flex: 1, textAlign: "center", color: "white", fontWeight: 700, fontSize: 17, margin: 0 }}>Dépôt et retrait</h1>
           <button
-            onClick={() => navigate(tab === "depot" ? "/deposit-history" : "/withdrawal-history")}
+            onClick={() => navigate(tab === "depot" ? "/history?tab=deposits" : "/history?tab=withdrawals")}
             style={{ background: "none", border: "none", cursor: "pointer", color: "white", fontSize: 14, fontWeight: 700 }}
           >
             Dossiers
