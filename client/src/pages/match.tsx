@@ -60,11 +60,11 @@ function generateScoreOptions(match: Match): ScoreOption[] {
     const [bh, ba] = b.split("-").map(Number);
     return ah !== bh ? ah - bh : aa - ba;
   });
-  const baseRate = parseFloat(match.profitRate) || 7.5;
   return chosen.map((score) => {
-    // Use the match's real profit rate — same for all options (backend settles with profitRate)
+    const r1 = rand();
+    const chance = parseFloat((1.5 + r1 * 10.5).toFixed(2));
     const pool = Math.floor((30 + rand() * 60) * 1e9);
-    return { score, chance: baseRate, pool };
+    return { score, chance, pool };
   });
 }
 
