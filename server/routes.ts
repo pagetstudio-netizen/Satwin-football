@@ -1388,7 +1388,16 @@ export async function registerRoutes(
       const settings = await storage.getSettings();
       if (settings.ashtechpayEnabled !== "true")
         return res.status(403).json({ message: "AshtechPay désactivé" });
-      const assets = await ashtechpay.getCryptoAssets();
+      const all = await ashtechpay.getCryptoAssets();
+      // Only expose USDT on TRC20 and BEP20 (BSC) — confirmed working by provider
+      const ALLOWED = ["USDT.TRC20", "USDT.BEP20", "USDT.BSC"];
+      const assets = all.filter(a =>
+        a.coin === "USDT" &&
+        (ALLOWED.includes(a.asset_code) ||
+          a.network?.toUpperCase().includes("TRC20") ||
+          a.network?.toUpperCase().includes("BEP20") ||
+          a.network?.toUpperCase().includes("BSC"))
+      );
       res.json({ assets });
     } catch (error: any) {
       console.error("[ashtechpay] crypto assets error:", error);
