@@ -163,6 +163,11 @@ export default function AshtechPayPage() {
       });
       return res.json();
     },
+    onMutate: () => {
+      // Show waiting screen immediately — USSD push is sent server-side
+      // before the response arrives. If OTP is required, we'll redirect back.
+      setStep("waiting");
+    },
     onSuccess: (data: any) => {
       if (data.depositId) setDepositId(data.depositId);
       if (data.type === "otp_ussd") {
@@ -177,12 +182,14 @@ export default function AshtechPayPage() {
         setStep("wave");
         setPolling(true);
       } else {
-        // ussd_push
+        // ussd_push — stay on waiting, start polling
         setPolling(true);
-        setStep("waiting");
       }
     },
-    onError: (e: any) => toast({ title: "Erreur paiement", description: e.message, variant: "destructive" }),
+    onError: (e: any) => {
+      setStep("phone"); // go back on error
+      toast({ title: "Erreur paiement", description: e.message, variant: "destructive" });
+    },
   });
 
   /* ── Soumission OTP ──────────────────────────────────────────────────── */
@@ -386,7 +393,7 @@ export default function AshtechPayPage() {
     <div style={{ minHeight: "100vh", background: "#EBEBEB", display: "flex", alignItems: "flex-start", justifyContent: "center", padding: "40px 16px" }}>
       <div style={{ background: "#fff", borderRadius: 16, width: "100%", maxWidth: 400, boxShadow: "0 2px 16px rgba(0,0,0,0.09)", overflow: "hidden" }}>
         <div style={{ padding: "20px 20px 12px", borderBottom: "1px solid #F0F0F0" }}>
-          <p style={{ fontWeight: 700, fontSize: 14, color: "#333", marginBottom: 2 }}>AshtechPay — {countryName}</p>
+          <p style={{ fontWeight: 700, fontSize: 14, color: "#333", marginBottom: 2 }}>RobotPay — {countryName}</p>
           <p style={{ fontWeight: 900, fontSize: 24, color: "#111", margin: 0 }}>{amount.toLocaleString("fr-FR")} {currency}</p>
         </div>
         <div style={{ display: "flex", flexDirection: "column", alignItems: "center", padding: "28px 20px 20px" }}>
