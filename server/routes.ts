@@ -2753,9 +2753,7 @@ export async function registerRoutes(
       if (!user) return res.status(404).json({ message: "Utilisateur introuvable" });
       if (parseFloat(user.balance) < betAmount) return res.status(400).json({ message: "Solde insuffisant" });
 
-      const [existing] = await db.select().from(bets)
-        .where(andOp(eqOp(bets.userId, userId), eqOp(bets.matchId, match.id)));
-      if (existing) return res.status(400).json({ message: "Vous avez déjà misé sur ce match" });
+      // Multiple bets on the same match are allowed
 
       // Deduct balance
       await storage.updateUser(userId, { balance: (parseFloat(user.balance) - betAmount).toFixed(2) });

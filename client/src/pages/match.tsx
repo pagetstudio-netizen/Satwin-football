@@ -346,7 +346,7 @@ function MatchDetail({
   const [selectedScore, setSelectedScore] = useState<ScoreOption | null>(null);
   const [successData, setSuccessData] = useState<{ amount: number; gain: number; exchangeId: string } | null>(null);
   const { data: userBets } = useQuery<any[]>({ queryKey: ["/api/bets"] });
-  const alreadyBet = (userBets || []).some(b => b.bet?.matchId === match.id);
+  const alreadyBet = (userBets || []).some(b => b.bet?.matchId === match.id); // kept for "Misé" badge only
 
   const now = new Date();
   const fmtNow = () => {
