@@ -119,6 +119,8 @@ export const deposits = pgTable("deposits", {
   omnipayReference: text("omnipay_reference"),
   sendavapayReference: text("sendavapay_reference"),
   sendavapayToken: text("sendavapay_token"),
+  ashtechpayTransactionId: text("ashtechpay_transaction_id"),
+  ashtechpayReference: text("ashtechpay_reference"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   processedAt: timestamp("processed_at"),
   processedBy: integer("processed_by"),

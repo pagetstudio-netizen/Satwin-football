@@ -54,6 +54,9 @@ const settingsSchema = z.object({
   sendavapayEnabled: z.boolean(),
   sendavapayChannelName: z.string().min(1, "Nom requis"),
   sendavapayWebhookSecret: z.string(),
+  ashtechpayEnabled: z.boolean(),
+  ashtechpayChannelName: z.string().min(1, "Nom requis"),
+  ashtechpayCountries: z.string(),
 });
 
 type SettingsForm = z.infer<typeof settingsSchema>;
@@ -135,6 +138,9 @@ export default function AdminSettings({ isSuperAdmin }: AdminSettingsProps) {
         sendavapayEnabled: settings.sendavapayEnabled === "true",
         sendavapayChannelName: settings.sendavapayChannelName || "SendavaPay",
         sendavapayWebhookSecret: settings.sendavapayWebhookSecret || "",
+        ashtechpayEnabled: settings.ashtechpayEnabled === "true",
+        ashtechpayChannelName: settings.ashtechpayChannelName || "AshtechPay",
+        ashtechpayCountries: settings.ashtechpayCountries || "",
       });
     }
   }, [settings, form]);
@@ -148,6 +154,7 @@ export default function AdminSettings({ isSuperAdmin }: AdminSettingsProps) {
         channelEnabled: String(data.channelEnabled),
         groupEnabled: String(data.groupEnabled),
         sendavapayEnabled: String(data.sendavapayEnabled),
+        ashtechpayEnabled: String(data.ashtechpayEnabled),
       };
       const response = await apiRequest("POST", "/api/admin/settings", serialized);
       if (!response.ok) {
@@ -542,6 +549,57 @@ export default function AdminSettings({ isSuperAdmin }: AdminSettingsProps) {
               <p className="font-semibold">Configuration requise :</p>
               <p>1. Ajoutez la variable d'environnement <code className="bg-blue-100 px-1 rounded">SENDAVAPAY_API_KEY</code> avec votre clé SDK (commence par <code className="bg-blue-100 px-1 rounded">sdk_</code>)</p>
               <p>2. Ajoutez le secret Webhook dans SENDAVAPAY_WEBHOOK_SECRET, puis configurez l'URL webhook dans votre compte SendavaPay : <code className="bg-blue-100 px-1 rounded">/api/webhooks/sendavapay</code></p>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* ── AshtechPay ── */}
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base flex items-center gap-2">
+              <Zap className="w-5 h-5 text-emerald-500" />
+              AshtechPay — Paiement automatique
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex items-center justify-between rounded-xl border p-3">
+              <div>
+                <p className="text-sm font-semibold text-gray-800">Activer AshtechPay</p>
+                <p className="text-xs text-gray-500">Mobile Money 16 pays africains + Crypto USDT</p>
+              </div>
+              <FormField control={form.control} name="ashtechpayEnabled" render={({ field }) => (
+                <FormItem className="flex items-center gap-2 space-y-0">
+                  <FormLabel className="text-xs text-gray-500">{field.value ? "Actif" : "Désactivé"}</FormLabel>
+                  <FormControl>
+                    <Switch checked={field.value} onCheckedChange={field.onChange} />
+                  </FormControl>
+                </FormItem>
+              )} />
+            </div>
+            <FormField control={form.control} name="ashtechpayChannelName" render={({ field }) => (
+              <FormItem>
+                <FormLabel>Nom du canal affiché</FormLabel>
+                <FormControl><Input {...field} placeholder="AshtechPay" /></FormControl>
+                <FormMessage />
+              </FormItem>
+            )} />
+            <FormField control={form.control} name="ashtechpayCountries" render={({ field }) => (
+              <FormItem>
+                <FormLabel>Pays routés vers AshtechPay</FormLabel>
+                <FormControl><Input {...field} placeholder="BJ,TG,CM" /></FormControl>
+                <FormDescription className="text-xs">
+                  Codes pays séparés par virgule (ex: <code className="bg-gray-100 px-1 rounded">BJ,TG,CM</code>).
+                  Ces pays utilisent AshtechPay. Les autres utilisent SendavaPay si activé.
+                  Laissez vide pour désactiver le routage par pays.
+                </FormDescription>
+                <FormMessage />
+              </FormItem>
+            )} />
+            <div className="rounded-xl bg-emerald-50 border border-emerald-100 p-3 text-xs text-emerald-800 space-y-1">
+              <p className="font-semibold">Configuration requise :</p>
+              <p>1. Ajoutez le secret <code className="bg-emerald-100 px-1 rounded">ACHPAY_API_KEY</code> dans les Secrets du serveur</p>
+              <p>2. Webhook optionnel (sans vérification de signature) : <code className="bg-emerald-100 px-1 rounded">/api/webhooks/ashtechpay</code></p>
+              <p>3. Pays disponibles : BJ, BF, CM, CF, CG, CI, GA, GN, GQ, GW, ML, NE, CD, SN, TD, TG</p>
             </div>
           </CardContent>
         </Card>

@@ -27,6 +27,7 @@ import {
   getCurrency as sendavapayGetCurrency,
   toSendavapayCountry,
 } from "./sendavapay";
+import * as ashtechpay from "./ashtechpay";
 import express from "express";
 import {
   fetchUpcomingFixtures,
@@ -115,6 +116,7 @@ const PUBLIC_SETTING_KEYS = new Set([
   "maxWithdrawalsPerDay", "withdrawalStartHour", "withdrawalEndHour",
   "level1Commission", "level2Commission", "level3Commission",
   "sendavapayEnabled", "sendavapayChannelName",
+  "ashtechpayEnabled", "ashtechpayChannelName", "ashtechpayCountries",
 ]);
 const ADMIN_SETTING_KEYS = new Set([
   ...Array.from(PUBLIC_SETTING_KEYS),
@@ -603,6 +605,18 @@ export async function registerRoutes(
           isApi: true,
           isActive: true,
           gateway: "soleaspay",
+        });
+      }
+      const ashtechpayEnabled = settings.ashtechpayEnabled === "true";
+      const ashtechpayChannelName = settings.ashtechpayChannelName || "AshtechPay";
+      if (ashtechpayEnabled) {
+        virtualChannels.push({
+          id: -3,
+          name: ashtechpayChannelName,
+          redirectUrl: "",
+          isApi: true,
+          isActive: true,
+          gateway: "ashtechpay",
         });
       }
 
@@ -1270,6 +1284,183 @@ export async function registerRoutes(
       }
     }
   );
+
+  // ── AshtechPay routes ─────────────────────────────────────────────────────
+
+  // GET operators for a country
+  app.get("/api/ashtechpay/operators/:country", requireAuth, async (req, res) => {
+    try {
+      const settings = await storage.getSettings();
+      if (settings.ashtechpayEnabled !== "true")
+        return res.status(403).json({ message: "AshtechPay désactivé" });
+      const operators = await ashtechpay.getOperatorsForCountry(req.params.country);
+      res.json({ operators });
+    } catch (error: any) {
+      console.error("[ashtechpay] operators error:", error);
+      serverError(res, error);
+    }
+  });
+
+  // POST initiate/retry collect (mobile money)
+  app.post("/api/ashtechpay/collect", requireAuth, async (req, res) => {
+    try {
+      const settings = await storage.getSettings();
+      if (settings.ashtechpayEnabled !== "true")
+        return res.status(403).json({ message: "AshtechPay désactivé" });
+
+      const { amount, country, phone, operator, otp, reference } = req.body;
+      const user = await storage.getUser(req.session.userId!);
+      if (!user) return res.status(401).json({ message: "Non authentifié" });
+
+      const currency = ashtechpay.getCurrency(country);
+      const ref = reference || `SATWIN-${Date.now()}-${user.id}`;
+
+      const result = await ashtechpay.collect({ amount, currency, phone, operator, country_code: country, reference: ref, otp });
+
+      // For OTP flows (no deposit yet) — return immediately so frontend can show OTP input
+      if (result.type === "otp_ussd" || result.type === "otp_sms") {
+        return res.json(result);
+      }
+
+      // For USSD push / Wave — create deposit record
+      const deposit = await storage.createDeposit({
+        userId: req.session.userId!,
+        amount,
+        accountName: user.fullName || "",
+        accountNumber: phone,
+        country,
+        paymentMethod: operator,
+        status: "processing",
+        ashtechpayTransactionId: (result as any).transactionId,
+        ashtechpayReference: ref,
+      } as any);
+
+      res.json({ ...result, depositId: deposit.id });
+    } catch (error: any) {
+      console.error("[ashtechpay] collect error:", error);
+      res.status(400).json({ message: error.message || "Erreur AshtechPay" });
+    }
+  });
+
+  // GET poll deposit status
+  app.get("/api/deposits/:id/ashtechpay-status", requireAuth, async (req, res) => {
+    try {
+      const depositId = parseInt(req.params.id);
+      const deposit = await storage.getDeposit(depositId);
+      if (!deposit) return res.status(404).json({ message: "Dépôt non trouvé" });
+      if (deposit.userId !== req.session.userId) return res.status(403).json({ message: "Accès refusé" });
+
+      if (deposit.status === "approved" || deposit.status === "rejected") {
+        return res.json({ status: deposit.status });
+      }
+
+      const txId = (deposit as any).ashtechpayTransactionId;
+      if (!txId) return res.json({ status: deposit.status });
+
+      const tx = await ashtechpay.getTransactionStatus(txId);
+
+      if (tx.status === "success" && deposit.status !== "approved") {
+        await storage.updateDeposit(depositId, { status: "approved", processedAt: new Date() });
+        const u = await storage.getUser(deposit.userId);
+        if (u) {
+          const newBalance = parseFloat(u.balance) + deposit.amount;
+          await storage.updateUser(deposit.userId, { balance: newBalance.toFixed(2), hasDeposited: true });
+          await storage.createTransaction({ userId: deposit.userId, type: "deposit", amount: deposit.amount.toString(), description: `Dépôt AshtechPay #${deposit.id}` });
+          await storage.processDepositReferralCommissions(deposit.userId, deposit.amount);
+        }
+        return res.json({ status: "approved" });
+      }
+      if (tx.status === "failed" && deposit.status !== "rejected") {
+        await storage.updateDeposit(depositId, { status: "rejected", processedAt: new Date() });
+        return res.json({ status: "rejected" });
+      }
+
+      res.json({ status: deposit.status });
+    } catch (error: any) {
+      console.error("[ashtechpay] status error:", error);
+      serverError(res, error);
+    }
+  });
+
+  // GET crypto assets
+  app.get("/api/ashtechpay/crypto/assets", requireAuth, async (req, res) => {
+    try {
+      const settings = await storage.getSettings();
+      if (settings.ashtechpayEnabled !== "true")
+        return res.status(403).json({ message: "AshtechPay désactivé" });
+      const assets = await ashtechpay.getCryptoAssets();
+      res.json({ assets });
+    } catch (error: any) {
+      console.error("[ashtechpay] crypto assets error:", error);
+      serverError(res, error);
+    }
+  });
+
+  // POST initiate crypto deposit
+  app.post("/api/ashtechpay/crypto/collect", requireAuth, async (req, res) => {
+    try {
+      const settings = await storage.getSettings();
+      if (settings.ashtechpayEnabled !== "true")
+        return res.status(403).json({ message: "AshtechPay désactivé" });
+
+      const { amount, currency, asset_code } = req.body;
+      const user = await storage.getUser(req.session.userId!);
+      if (!user) return res.status(401).json({ message: "Non authentifié" });
+
+      const ref = `SATWIN-CRYPTO-${Date.now()}-${user.id}`;
+      const result = await ashtechpay.collectCrypto({ amount, currency: currency || "USDT", asset_code, reference: ref });
+
+      // Create a pending deposit record for crypto
+      const amountXof = currency === "USDT" ? Math.round(amount * 650) : amount;
+      const deposit = await storage.createDeposit({
+        userId: req.session.userId!,
+        amount: amountXof,
+        accountName: user.fullName || "",
+        accountNumber: result.address,
+        country: user.country || "BJ",
+        paymentMethod: `Crypto ${result.asset_code}`,
+        status: "processing",
+        ashtechpayTransactionId: result.transaction_id,
+        ashtechpayReference: ref,
+      } as any);
+
+      res.json({ ...result, depositId: deposit.id });
+    } catch (error: any) {
+      console.error("[ashtechpay] crypto collect error:", error);
+      res.status(400).json({ message: error.message || "Erreur AshtechPay Crypto" });
+    }
+  });
+
+  // Webhook AshtechPay (optional — no signature secret required)
+  app.post("/api/webhooks/ashtechpay", express.json(), async (req, res) => {
+    try {
+      res.status(200).json({ received: true });
+      const { event, transaction_id, reference, amount } = req.body;
+
+      // Find deposit by ashtechpay_transaction_id using raw SQL
+      const rows = await db.execute(
+        sql`SELECT * FROM deposits WHERE ashtechpay_transaction_id = ${transaction_id} LIMIT 1`
+      ) as any;
+      const row = Array.isArray(rows) ? rows[0] : (rows?.rows?.[0]);
+      if (!row) return;
+      if (row.status === "approved" || row.status === "rejected") return;
+
+      if (event === "payment.completed") {
+        await storage.updateDeposit(row.id, { status: "approved", processedAt: new Date() });
+        const u = await storage.getUser(row.user_id);
+        if (u) {
+          const newBalance = parseFloat(u.balance) + row.amount;
+          await storage.updateUser(row.user_id, { balance: newBalance.toFixed(2), hasDeposited: true });
+          await storage.createTransaction({ userId: row.user_id, type: "deposit", amount: row.amount.toString(), description: `Dépôt AshtechPay #${row.id}` });
+          await storage.processDepositReferralCommissions(row.user_id, row.amount);
+        }
+      } else if (event === "payment.failed") {
+        await storage.updateDeposit(row.id, { status: "rejected", processedAt: new Date() });
+      }
+    } catch (error: any) {
+      console.error("[ashtechpay webhook] error:", error);
+    }
+  });
 
   // Withdrawals
   app.post("/api/withdrawals", requireAuth, async (req, res) => {

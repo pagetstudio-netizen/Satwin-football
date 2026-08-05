@@ -51,7 +51,18 @@ function DepotForm({ currency, minDeposit }: { currency: string; minDeposit: num
   const [selectedCountry, setSelectedCountry] = useState(user?.country || "");
 
   const { data: apiCountries = [] } = useQuery<ApiCountry[]>({ queryKey: ["/api/countries"] });
+  const { data: publicSettings } = useQuery<Record<string, string>>({ queryKey: ["/api/settings"], staleTime: 60_000 });
   const countryInfo = apiCountries.find((c: any) => c.code === selectedCountry);
+
+  // Determine payment provider for the selected country
+  const ashtechCountries = (publicSettings?.ashtechpayCountries || "").split(",").map(s => s.trim().toUpperCase()).filter(Boolean);
+  const sendavapayEnabled = publicSettings?.sendavapayEnabled === "true";
+  const ashtechpayEnabled = publicSettings?.ashtechpayEnabled === "true";
+  function getProvider(countryCode: string): "ashtechpay" | "sendavapay" | "manual" {
+    if (ashtechpayEnabled && ashtechCountries.includes(countryCode.toUpperCase())) return "ashtechpay";
+    if (sendavapayEnabled) return "sendavapay";
+    return "manual";
+  }
 
   return (
     <div style={{ padding: "0 0 24px" }}>
@@ -130,7 +141,12 @@ function DepotForm({ currency, minDeposit }: { currency: string; minDeposit: num
                   return toast({ title: "Pays requis", description: "Veuillez choisir votre pays", variant: "destructive" });
                 if (!amount || Number(amount) < minDeposit)
                   return toast({ title: "Montant invalide", description: `Minimum ${minDeposit.toLocaleString()} ${currency}`, variant: "destructive" });
-                navigate(`/drimpay?amount=${Number(amount)}&country=${selectedCountry}`);
+                const provider = getProvider(selectedCountry);
+                if (provider === "ashtechpay") {
+                  navigate(`/ashtechpay?amount=${Number(amount)}&country=${selectedCountry}`);
+                } else {
+                  navigate(`/drimpay?amount=${Number(amount)}&country=${selectedCountry}`);
+                }
               }}
               style={{
                 width: "100%", background: GREEN,
