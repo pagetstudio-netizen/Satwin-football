@@ -1287,13 +1287,28 @@ export async function registerRoutes(
 
   // ── AshtechPay routes ─────────────────────────────────────────────────────
 
-  // GET operators for a country
+  // GET operators for a country — from admin DB config, not AshtechPay API
   app.get("/api/ashtechpay/operators/:country", requireAuth, async (req, res) => {
     try {
       const settings = await storage.getSettings();
       if (settings.ashtechpayEnabled !== "true")
         return res.status(403).json({ message: "AshtechPay désactivé" });
-      const operators = await ashtechpay.getOperatorsForCountry(req.params.country);
+
+      // Use admin-configured operators for the country (from DB)
+      const countries = await storage.getCountries();
+      const found = countries.find(c => c.code === req.params.country.toUpperCase());
+      let operators: string[] = [];
+      if (found?.operators) {
+        try {
+          operators = typeof found.operators === "string"
+            ? JSON.parse(found.operators)
+            : (found.operators as string[]);
+        } catch { operators = []; }
+      }
+      // Fallback to AshtechPay API only if admin hasn't configured any operators
+      if (operators.length === 0) {
+        operators = await ashtechpay.getOperatorsForCountry(req.params.country);
+      }
       res.json({ operators });
     } catch (error: any) {
       console.error("[ashtechpay] operators error:", error);
