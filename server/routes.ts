@@ -2952,6 +2952,29 @@ export async function registerRoutes(
       if (updates.profitRate) updates.profitRate = String(updates.profitRate);
       const [updated] = await db.update(matches).set(updates).where(eqOp(matches.id, id)).returning();
       if (!updated) return res.status(404).json({ message: "Match introuvable" });
+
+      // If match is being cancelled → auto-refund all pending bets
+      if (updates.status === "cancelled") {
+        const pendingBets = await db.select().from(bets)
+          .where(andOp(eqOp(bets.matchId, id), eqOp(bets.status, "pending")));
+        for (const bet of pendingBets) {
+          await db.update(bets).set({ status: "refunded", profit: "0", settledAt: new Date() })
+            .where(eqOp(bets.id, bet.id));
+          const u = await storage.getUser(bet.userId);
+          if (u) {
+            await storage.updateUser(bet.userId, {
+              balance: (parseFloat(u.balance) + parseFloat(bet.amount)).toFixed(2),
+            });
+            await storage.createTransaction({
+              userId: bet.userId, type: "bet_refund", amount: bet.amount,
+              description: `Remboursement automatique — match annulé: ${updated.homeTeam} vs ${updated.awayTeam}`,
+            });
+          }
+        }
+        if (pendingBets.length > 0)
+          console.log(`[cancel] Match ${id} annulé — ${pendingBets.length} pari(s) remboursé(s) automatiquement`);
+      }
+
       await storage.logAdminAction(req.session.userId!, "update_match", null, `Match ${id} modifié`);
       res.json(updated);
     } catch (e: any) {
