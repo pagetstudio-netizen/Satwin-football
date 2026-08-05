@@ -5,7 +5,7 @@ import { useToast } from "@/hooks/use-toast";
 import { copyToClipboard } from "@/hooks/use-clipboard";
 import { getCountryByCode } from "@/lib/countries";
 import { useLocation } from "wouter";
-import { ChevronRight, Copy, Search, X, Trophy, Share2, Users, DollarSign, TrendingUp, Gift } from "lucide-react";
+import { ChevronRight, Copy, Search, X, Trophy, Share2, Users, DollarSign, TrendingUp, Gift, Megaphone } from "lucide-react";
 import iconTeam      from "@assets/icons/team.png";
 import iconRapport   from "@assets/icons/rapport.png";
 import iconDossiers  from "@assets/icons/dossiers.png";
@@ -548,7 +548,10 @@ export default function TeamPage() {
 
           {/* ── Explication ── */}
           <div style={{ margin: "14px 14px 0", background: "white", borderRadius: 14, padding: "14px 16px", boxShadow: "0 1px 8px rgba(0,0,0,0.05)", borderLeft: "4px solid #15803d" }}>
-            <p style={{ margin: "0 0 6px", fontWeight: 700, fontSize: 14, color: "#15803d" }}>📢 Prime promotionnelle</p>
+            <p style={{ margin: "0 0 6px", fontWeight: 700, fontSize: 14, color: "#15803d", display: "flex", alignItems: "center", gap: 6 }}>
+              <Megaphone size={16} color="#15803d" />
+              Prime promotionnelle
+            </p>
             <p style={{ margin: 0, fontSize: 13, color: "#374151", lineHeight: 1.65 }}>
               Vous recevrez <strong>5 % du montant total des dépôts</strong> de vos utilisateurs chaque <strong>mardi</strong>.
               Seuls les <em>nouveaux dépôts</em> de la semaine sont pris en compte — les dépôts déjà comptabilisés lors d'un versement précédent ne génèrent pas de nouvelle prime.
