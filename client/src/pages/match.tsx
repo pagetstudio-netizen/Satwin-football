@@ -422,6 +422,20 @@ function MatchDetail({
         {/* Section title */}
         <p className="text-center text-xs font-bold text-gray-500 tracking-widest my-3">À TEMPS PLEIN</p>
 
+        {/* Score prédit + Taux de profit banner */}
+        <div className="rounded-xl mb-3 px-4 py-3 flex items-center justify-between"
+          style={{ background: "linear-gradient(90deg,#14532d 0%,#15803d 100%)", boxShadow: "0 2px 8px #15803d33" }}>
+          <div className="flex flex-col items-center flex-1">
+            <span className="text-white/70 text-[10px] font-semibold tracking-widest uppercase mb-0.5">Score prédit</span>
+            <span className="text-white font-black text-xl tracking-widest">{match.predictedScore}</span>
+          </div>
+          <div className="w-px h-10 bg-white/20 mx-2" />
+          <div className="flex flex-col items-center flex-1">
+            <span className="text-white/70 text-[10px] font-semibold tracking-widest uppercase mb-0.5">Taux de profit</span>
+            <span className="text-white font-black text-xl">+{match.profitRate}%</span>
+          </div>
+        </div>
+
         {/* Update row */}
         <div className="flex items-center justify-between mb-2">
           <span className="text-xs text-gray-400">{fmtNow()} Mise à jour</span>
