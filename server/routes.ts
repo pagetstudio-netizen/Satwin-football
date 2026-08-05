@@ -1408,7 +1408,24 @@ export async function registerRoutes(
       if (!user) return res.status(401).json({ message: "Non authentifié" });
 
       const ref = `SATWIN-CRYPTO-${Date.now()}-${user.id}`;
-      const result = await ashtechpay.collectCrypto({ amount, currency: currency || "USDT", asset_code, reference: ref });
+
+      // Build customer object — must always be a plain object (API rejects absent/non-object)
+      const nameParts = (user.fullName || "").trim().split(/\s+/);
+      const firstName = nameParts[0] || "Client";
+      const lastName  = nameParts.slice(1).join(" ") || "SATWIN";
+
+      // Notify URL for webhook (must be HTTPS, skip on localhost)
+      const host = process.env.REPLIT_DEV_DOMAIN || process.env.APP_DOMAIN || "";
+      const notifyUrl = host ? `https://${host}/api/webhooks/ashtechpay` : undefined;
+
+      const result = await ashtechpay.collectCrypto({
+        amount,
+        currency: currency || "USDT",
+        asset_code,
+        reference: ref,
+        customer: { firstName, lastName },
+        ...(notifyUrl ? { notify_url: notifyUrl } : {}),
+      });
 
       // Create a pending deposit record for crypto
       const amountXof = currency === "USDT" ? Math.round(amount * 650) : amount;
