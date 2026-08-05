@@ -60,11 +60,11 @@ function generateScoreOptions(match: Match): ScoreOption[] {
     const [bh, ba] = b.split("-").map(Number);
     return ah !== bh ? ah - bh : aa - ba;
   });
+  const baseRate = parseFloat(match.profitRate) || 7.5;
   return chosen.map((score) => {
-    const r1 = rand();
-    const chance = parseFloat((1.5 + r1 * 10.5).toFixed(2));
+    // Use the match's real profit rate — same for all options (backend settles with profitRate)
     const pool = Math.floor((30 + rand() * 60) * 1e9);
-    return { score, chance, pool };
+    return { score, chance: baseRate, pool };
   });
 }
 
@@ -194,8 +194,8 @@ function BetModal({
   const balance = parseFloat(user?.balance || "0");
   const [amount, setAmount] = useState("");
   const amountNum = parseFloat(amount) || 0;
-  // Gain = amount × (chance/100) × 0.95 (5% fee)
-  const gain = amountNum > 0 ? amountNum * (scoreOption.chance / 100) * 0.95 : 0;
+  // Gain = amount × profitRate/100 (matches backend settlement exactly)
+  const gain = amountNum > 0 ? amountNum * (parseFloat(match.profitRate) || scoreOption.chance) / 100 : 0;
 
   const betMutation = useMutation({
     mutationFn: async () => {
