@@ -7,7 +7,7 @@
 const ASHTECH_BASE = "https://ashtechpay.top";
 
 function apiKey(): string {
-  return process.env.ACHPAY_API_KEY || "";
+  return process.env.ASHTECHPAY_API_KEY || process.env.ACHPAY_API_KEY || "";
 }
 
 function authHeaders() {
