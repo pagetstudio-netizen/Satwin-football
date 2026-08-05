@@ -184,12 +184,30 @@ export interface CryptoCollectResult {
 }
 
 export async function collectCrypto(params: CryptoCollectParams): Promise<CryptoCollectResult> {
+  // Build payload explicitly — no undefined values, no extra keys
+  const payload: Record<string, unknown> = {
+    amount:     params.amount,
+    currency:   params.currency,
+    asset_code: params.asset_code,
+  };
+  if (params.reference)   payload.reference   = params.reference;
+  if (params.notify_url)  payload.notify_url  = params.notify_url;
+  if (params.customer &&
+      typeof params.customer === "object" &&
+      (params.customer.firstName || params.customer.lastName || params.customer.email)) {
+    payload.customer = params.customer;
+  }
+
+  const bodyStr = JSON.stringify(payload);
+  console.log("[ashtechpay] crypto collect →", bodyStr);
+
   const res = await fetch(`${ASHTECH_BASE}/v1/crypto/collect`, {
     method: "POST",
     headers: authHeaders(),
-    body: JSON.stringify(params),
+    body: bodyStr,
   });
   const data = await res.json();
+  console.log("[ashtechpay] crypto collect ←", res.status, JSON.stringify(data));
   if (!res.ok) throw new Error(data.message || `AshtechPay crypto error ${res.status}`);
   return data;
 }

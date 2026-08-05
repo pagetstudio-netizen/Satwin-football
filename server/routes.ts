@@ -1418,22 +1418,20 @@ export async function registerRoutes(
 
       const ref = `SATWIN-CRYPTO-${Date.now()}-${user.id}`;
 
-      // Build customer object — must always be a plain object (API rejects absent/non-object)
+      // Build customer object with all three fields — provider requires a complete object
       const nameParts = (user.fullName || "").trim().split(/\s+/);
       const firstName = nameParts[0] || "Client";
       const lastName  = nameParts.slice(1).join(" ") || "SATWIN";
-
-      // Notify URL for webhook (must be HTTPS, skip on localhost)
-      const host = process.env.REPLIT_DEV_DOMAIN || process.env.APP_DOMAIN || "";
-      const notifyUrl = host ? `https://${host}/api/webhooks/ashtechpay` : undefined;
+      // Generate a deterministic valid email (provider rejects absent/incomplete customer)
+      const safePhone = (user.phone || "").replace(/\D/g, "") || String(user.id);
+      const customerEmail = `u${safePhone}@satwinfoot.app`;
 
       const result = await ashtechpay.collectCrypto({
         amount,
         currency: currency || "USDT",
         asset_code,
         reference: ref,
-        customer: { firstName, lastName },
-        ...(notifyUrl ? { notify_url: notifyUrl } : {}),
+        customer: { firstName, lastName, email: customerEmail },
       });
 
       // Create a pending deposit record for crypto
