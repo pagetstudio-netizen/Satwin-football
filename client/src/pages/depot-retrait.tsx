@@ -201,7 +201,11 @@ function DepotForm({ currency, minDeposit }: { currency: string; minDeposit: num
             Veuillez lire le <span style={{ color: GREEN, textDecoration: "underline" }}>Règles de recharge</span>recharge.readRuleBehind
           </p>
           <button
-            onClick={() => alert("La crypto monnaie sera bientôt disponible")}
+            onClick={() => {
+              if (!amount || Number(amount) <= 0)
+                return toast({ title: "Montant invalide", description: "Entrez un montant en USDT", variant: "destructive" });
+              navigate(`/ashtechpay-crypto?amount=${Number(amount)}&currency=USDT`);
+            }}
             style={{ width: "100%", background: GREEN, color: "white", border: "none", borderRadius: 8, padding: "15px", fontWeight: 800, fontSize: 16, cursor: "pointer" }}>
             SOUMETTRE
           </button>
