@@ -1511,6 +1511,19 @@ export async function registerRoutes(
         return res.status(401).json({ message: "Non authentifié" });
       }
 
+      // ── Dépôt obligatoire avant tout retrait ──────────────────────────────────
+      const depositCheck = await db.execute(
+        sql`SELECT COUNT(*) AS cnt FROM deposits
+            WHERE user_id = ${user.id} AND status IN ('approved','completed')`
+      );
+      const depositCount = parseInt((depositCheck.rows[0] as any)?.cnt ?? "0", 10);
+      if (depositCount === 0) {
+        return res.status(400).json({
+          message: "Vous devez effectuer un dépôt avant de pouvoir retirer",
+          code: "DEPOSIT_REQUIRED",
+        });
+      }
+
       const settingsForWithdrawal = await storage.getSettings();
       const minWithdrawal = parseInt(settingsForWithdrawal.minWithdrawal || "1000");
       if (amount < minWithdrawal) {
