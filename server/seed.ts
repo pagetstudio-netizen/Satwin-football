@@ -84,46 +84,15 @@ export async function seed() {
   const existingCountries = await db.select().from(countries);
   if (existingCountries.length === 0) {
     const defaultCountries = [
-      {
-        code: "TG",
-        name: "Togo",
-        currency: "XOF",
-        phonePrefix: "228",
-        operators: JSON.stringify(["Togocel", "Moov Africa Togo"]),
-        isActive: true,
-      },
-      {
-        code: "CM",
-        name: "Cameroun",
-        currency: "XAF",
-        phonePrefix: "237",
-        operators: JSON.stringify(["Orange Cameroun", "MTN Cameroun"]),
-        isActive: true,
-      },
-      {
-        code: "BF",
-        name: "Burkina Faso",
-        currency: "XOF",
-        phonePrefix: "226",
-        operators: JSON.stringify(["Orange Burkina", "Moov Africa Burkina"]),
-        isActive: true,
-      },
-      {
-        code: "NE",
-        name: "Niger",
-        currency: "XOF",
-        phonePrefix: "227",
-        operators: JSON.stringify(["NITA TRANSFERT", "AMANA TRANSFERT"]),
-        isActive: true,
-      },
-      {
-        code: "BJ",
-        name: "Benin",
-        currency: "XOF",
-        phonePrefix: "229",
-        operators: JSON.stringify(["MTN Benin", "Moov Africa Benin"]),
-        isActive: true,
-      },
+      { code: "BF", name: "Burkina Faso",    currency: "XOF", phonePrefix: "226", operators: JSON.stringify(["Moov Money","Orange Money"]), isActive: true },
+      { code: "BJ", name: "Bénin",           currency: "XOF", phonePrefix: "229", operators: JSON.stringify(["Moov Money","MTN Money","Celtiis Money","Coris Money"]), isActive: true },
+      { code: "CI", name: "Côte d'Ivoire",   currency: "XOF", phonePrefix: "225", operators: JSON.stringify(["Moov Money","MTN Money","Orange Money","Wave Money"]), isActive: true },
+      { code: "CM", name: "Cameroun",        currency: "XAF", phonePrefix: "237", operators: JSON.stringify(["MTN Money","Orange Money"]), isActive: true },
+      { code: "ML", name: "Mali",            currency: "XOF", phonePrefix: "223", operators: JSON.stringify(["Moov Money","Orange Money"]), isActive: true },
+      { code: "NE", name: "Niger",           currency: "XOF", phonePrefix: "227", operators: JSON.stringify(["Airtel Money","Wallet LigdiCash","Moov Money","Amanata","Nita","Zamani"]), isActive: true },
+      { code: "SN", name: "Sénégal",         currency: "XOF", phonePrefix: "221", operators: JSON.stringify(["Free Money","Orange Money","Wave Money","E-money"]), isActive: true },
+      { code: "TD", name: "Tchad",           currency: "XAF", phonePrefix: "235", operators: JSON.stringify(["Airtel Money","Moov Money"]), isActive: true },
+      { code: "TG", name: "Togo",            currency: "XOF", phonePrefix: "228", operators: JSON.stringify(["Moov Money","T-Money"]), isActive: true },
     ];
     for (const countryData of defaultCountries) {
       await db.insert(countries).values(countryData);
