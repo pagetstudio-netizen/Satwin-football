@@ -234,9 +234,9 @@ export default function BilletPage() {
           let gainValue: string;
           let gainColor = GREEN;
 
-          if (active) {
+          if (bet.status === "refunded") {
             gainLabel = "Statut";
-            gainValue = "En cours";
+            gainValue = "Remboursé";
             gainColor = "#f59e0b";
           } else if (bet.status === "won") {
             gainValue = fmtAmount(profit);
@@ -244,6 +244,10 @@ export default function BilletPage() {
             gainLabel = "Statut";
             gainValue = "Perdu";
             gainColor = "#e53935";
+          } else if (active) {
+            gainLabel = "Statut";
+            gainValue = "En cours";
+            gainColor = "#f59e0b";
           } else {
             gainValue = fmtAmount(profit);
           }
@@ -314,7 +318,7 @@ export default function BilletPage() {
                         </span>
                       </div>
                       {/* Real score — only shown after bet is settled */}
-                      {m.realScore && bet.status !== "pending" && (
+                      {(m.realScore || bet.status === "refunded") && bet.status !== "pending" && (
                         <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 4 }}>
                           <span style={{ fontSize: 12, color: "#888" }}>Résultat</span>
                           <span style={{
