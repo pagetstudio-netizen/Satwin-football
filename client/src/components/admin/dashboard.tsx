@@ -461,20 +461,24 @@ export default function AdminDashboard({ isSuperAdmin }: AdminDashboardProps) {
                   {/* Liste des bénéficiaires */}
                   <div className="border rounded-lg overflow-hidden">
                     {/* En-tête */}
-                    <div className="grid grid-cols-[1fr_auto_auto] gap-2 px-3 py-2 bg-muted/60 text-xs font-semibold text-muted-foreground">
+                    <div className="grid grid-cols-[1fr_auto_auto_auto] gap-2 px-3 py-2 bg-muted/60 text-xs font-semibold text-muted-foreground">
                       <span>Parrain</span>
                       <span className="text-right">Vol. dépôts</span>
-                      <span className="text-right">Prime (5%)</span>
+                      <span className="text-right">Taux</span>
+                      <span className="text-right">Prime</span>
                     </div>
                     {/* Lignes */}
                     {primePreview.beneficiaries.map((b, i) => (
-                      <div key={b.userId} className={`grid grid-cols-[1fr_auto_auto] gap-2 px-3 py-2 items-center text-sm ${i < primePreview.beneficiaries.length - 1 ? "border-b" : ""}`}>
+                      <div key={b.userId} className={`grid grid-cols-[1fr_auto_auto_auto] gap-2 px-3 py-2 items-center text-sm ${i < primePreview.beneficiaries.length - 1 ? "border-b" : ""}`}>
                         <div>
-                          <p className="font-medium text-foreground truncate max-w-[130px]">{b.fullName}</p>
+                          <p className="font-medium text-foreground truncate max-w-[110px]">{b.fullName}</p>
                           <p className="text-xs text-muted-foreground">{b.phone}</p>
                         </div>
                         <span className="text-right text-muted-foreground text-xs">
                           {b.depositVolume.toLocaleString("fr-FR", { minimumFractionDigits: 0 })} F
+                        </span>
+                        <span className={`text-right text-xs font-semibold px-1.5 py-0.5 rounded-full ${b.ratePercent !== 5 ? "bg-amber-100 text-amber-700" : "text-muted-foreground"}`}>
+                          {b.ratePercent}%
                         </span>
                         <span className="text-right font-bold text-green-600">
                           +{b.primeAmount.toLocaleString("fr-FR", { minimumFractionDigits: 2 })} F

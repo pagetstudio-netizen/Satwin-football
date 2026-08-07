@@ -12,7 +12,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { formatCurrency } from "@/lib/countries";
-import { Search, Edit, Ban, Shield, Lock, Unlock, Star, Users, Loader2, UserPlus, ChevronDown, ChevronUp, Trash2, ChevronLeft, ChevronRight, Landmark } from "lucide-react";
+import { Search, Edit, Ban, Shield, Lock, Unlock, Star, Users, Loader2, UserPlus, ChevronDown, ChevronUp, Trash2, ChevronLeft, ChevronRight, Landmark, Percent } from "lucide-react";
 import type { User, Product } from "@shared/schema";
 
 interface UserProductItem {
@@ -33,6 +33,7 @@ interface UserWithTeam extends User {
   level3Count: number;
   totalCommission: number;
   referrerName: string | null;
+  agencyCommissionRate: string | null;
 }
 
 interface TeamMember {
@@ -195,6 +196,28 @@ export default function AdminUsers({ isSuperAdmin }: AdminUsersProps) {
     },
   });
 
+  // État local pour les taux de commission en cours d'édition (par userId)
+  const [commissionRateEdits, setCommissionRateEdits] = useState<Record<number, string>>({});
+
+  const commissionRateMutation = useMutation({
+    mutationFn: async ({ userId, rate }: { userId: number; rate: string | null }) => {
+      const response = await apiRequest("PATCH", `/api/admin/users/${userId}/commission-rate`, { rate: rate === "" || rate === null ? null : parseFloat(rate) });
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.message || "Erreur");
+      }
+      return response.json();
+    },
+    onSuccess: (_, { userId, rate }) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/users"] });
+      toast({ title: rate === null || rate === "" ? "Taux réinitialisé au défaut (5%)" : `Taux de commission mis à jour : ${rate}%` });
+      setCommissionRateEdits(prev => { const n = { ...prev }; delete n[userId]; return n; });
+    },
+    onError: (error: any) => {
+      toast({ title: "Erreur", description: error.message, variant: "destructive" });
+    },
+  });
+
   const updateMutation = useMutation({
     mutationFn: async ({ userId, action, value }: { userId: number; action: string; value?: any }) => {
       const response = await apiRequest("POST", `/api/admin/users/${userId}/${action}`, { value });
@@ -320,6 +343,48 @@ export default function AdminUsers({ isSuperAdmin }: AdminUsersProps) {
                     <p className="text-muted-foreground">Commissions</p>
                     <p className="font-medium text-primary">{formatCurrency(user.totalCommission, user.country)}</p>
                   </div>
+                </div>
+
+                {/* ── Commission agence ── */}
+                <div className="mt-3 pt-3 border-t flex items-center gap-2">
+                  <Percent className="w-4 h-4 text-green-600 flex-shrink-0" />
+                  <span className="text-xs text-muted-foreground flex-shrink-0">Commission agence :</span>
+                  <Input
+                    type="number"
+                    min="0"
+                    max="100"
+                    step="0.5"
+                    placeholder={`${user.agencyCommissionRate ?? 5}%`}
+                    value={commissionRateEdits[user.id] ?? (user.agencyCommissionRate ?? "")}
+                    onChange={e => setCommissionRateEdits(prev => ({ ...prev, [user.id]: e.target.value }))}
+                    className="h-7 text-xs w-20"
+                  />
+                  <span className="text-xs text-muted-foreground">%</span>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-7 text-xs px-2"
+                    disabled={commissionRateMutation.isPending}
+                    onClick={() => {
+                      const val = commissionRateEdits[user.id];
+                      commissionRateMutation.mutate({ userId: user.id, rate: val === "" ? null : (val ?? String(user.agencyCommissionRate ?? 5)) });
+                    }}
+                  >
+                    {commissionRateMutation.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : "Enregistrer"}
+                  </Button>
+                  {user.agencyCommissionRate && (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-7 text-xs px-2 text-muted-foreground"
+                      onClick={() => commissionRateMutation.mutate({ userId: user.id, rate: null })}
+                    >
+                      Réinitialiser
+                    </Button>
+                  )}
+                  <span className="text-xs ml-auto font-medium text-green-700 bg-green-50 rounded px-2 py-0.5 border border-green-200">
+                    {user.agencyCommissionRate ? `${user.agencyCommissionRate}%` : "5% (défaut)"}
+                  </span>
                 </div>
               </CardContent>
             </Card>

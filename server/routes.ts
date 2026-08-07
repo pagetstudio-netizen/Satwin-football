@@ -2200,6 +2200,23 @@ export async function registerRoutes(
     }
   });
 
+  // ── Taux de commission individuel par agent ──────────────────────────────
+  app.patch("/api/admin/users/:id/commission-rate", requireAdmin, async (req, res) => {
+    try {
+      const userId = parseInt(req.params.id);
+      const { rate } = req.body; // null = réinitialiser au global (5%)
+      if (rate !== null && (isNaN(Number(rate)) || Number(rate) < 0 || Number(rate) > 100)) {
+        return res.status(400).json({ message: "Taux invalide (0-100)" });
+      }
+      await db.execute(sql`UPDATE users SET agency_commission_rate = ${rate === null ? null : String(rate)} WHERE id = ${userId}`);
+      await storage.logAdminAction(req.session.userId!, "set_commission_rate", userId,
+        `Taux commission agence → ${rate === null ? "défaut (5%)" : rate + "%"} pour user ${userId}`);
+      res.json({ success: true, agencyCommissionRate: rate });
+    } catch (e: any) {
+      serverError(res, e);
+    }
+  });
+
   app.get("/api/admin/users", requireAdmin, async (req, res) => {
     try {
       const search = (req.query.search as string) || "";
@@ -2592,14 +2609,28 @@ export async function registerRoutes(
         ORDER BY deposit_volume DESC
       `);
 
+      // Récupérer les taux individuels de commission
+      const userRatesRows = await db.execute(sql`SELECT id, agency_commission_rate FROM users WHERE agency_commission_rate IS NOT NULL`);
+      const userRates: Record<number, number> = {};
+      for (const row of ((userRatesRows as any)?.rows ?? userRatesRows)) {
+        userRates[Number(row.id)] = parseFloat(row.agency_commission_rate);
+      }
+
       const list: any[] = ((rows as any)?.rows ?? rows);
-      const beneficiaries = list.map(r => ({
-        userId:        Number(r.user_id),
-        fullName:      r.full_name,
-        phone:         r.phone,
-        depositVolume: parseFloat(r.deposit_volume),
-        primeAmount:   Math.round(parseFloat(r.deposit_volume) * 0.05 * 100) / 100,
-      }));
+      const beneficiaries = list.map(r => {
+        const uid = Number(r.user_id);
+        const rate = (userRates[uid] ?? 5) / 100;
+        const ratePercent = userRates[uid] ?? 5;
+        const depositVolume = parseFloat(r.deposit_volume);
+        return {
+          userId:        uid,
+          fullName:      r.full_name,
+          phone:         r.phone,
+          depositVolume,
+          ratePercent,
+          primeAmount:   Math.round(depositVolume * rate * 100) / 100,
+        };
+      });
       const totalPrime = beneficiaries.reduce((s, b) => s + b.primeAmount, 0);
 
       res.json({ isTuesday, beneficiaries, totalPrime, weekStart: monday.toISOString().slice(0, 10), weekEnd: sunday.toISOString().slice(0, 10) });
@@ -2633,12 +2664,20 @@ export async function registerRoutes(
         HAVING COALESCE(SUM(d.amount), 0) > 0
       `);
 
+      // Taux individuels
+      const rateRows = await db.execute(sql`SELECT id, agency_commission_rate FROM users WHERE agency_commission_rate IS NOT NULL`);
+      const userRates2: Record<number, number> = {};
+      for (const row of ((rateRows as any)?.rows ?? rateRows)) {
+        userRates2[Number(row.id)] = parseFloat(row.agency_commission_rate);
+      }
+
       const list: any[] = ((rows as any)?.rows ?? rows);
       let credited = 0;
 
       for (const r of list) {
-        const uid   = Number(r.user_id);
-        const prime = Math.round(parseFloat(r.deposit_volume) * 0.05 * 100) / 100;
+        const uid  = Number(r.user_id);
+        const rate = (userRates2[uid] ?? 5) / 100;
+        const prime = Math.round(parseFloat(r.deposit_volume) * rate * 100) / 100;
         if (prime <= 0) continue;
 
         const user = await storage.getUser(uid);
@@ -2648,7 +2687,7 @@ export async function registerRoutes(
         await storage.createTransaction({
           userId: uid, type: "prime_parrainage",
           amount: String(prime),
-          description: `Prime parrainage semaine du ${monday.toISOString().slice(0, 10)} (5 % dépôts filleuls)`,
+          description: `Prime parrainage semaine du ${monday.toISOString().slice(0, 10)} (${(userRates2[uid] ?? 5)}% dépôts filleuls)`,
         });
         credited++;
       }

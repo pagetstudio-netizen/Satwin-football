@@ -54,6 +54,7 @@ export const users = pgTable("users", {
   autoBetEnabled: boolean("auto_bet_enabled").notNull().default(false),
   amountShortcuts: text("amount_shortcuts").notNull().default("3000/5000/10000"),
   withdrawalUnlocked: boolean("withdrawal_unlocked").notNull().default(false),
+  agencyCommissionRate: decimal("agency_commission_rate", { precision: 5, scale: 2 }), // null = 5% global
 });
 
 // Withdrawal wallets
