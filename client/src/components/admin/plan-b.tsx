@@ -11,9 +11,27 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { Search, UserPlus, UserMinus, Crown, Shield, Lock, Unlock, X } from "lucide-react";
+import { Search, UserPlus, UserMinus, Crown, Shield, Lock, Unlock, X, ScanSearch, Zap, Wallet, CheckCheck } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 
 /* ── Types ─────────────────────────────────────────────────────────────────── */
+interface AnalysisCandidate {
+  id: number;
+  full_name: string;
+  phone: string;
+  country: string;
+  balance: string;
+  referral_code: string;
+  has_deposited: boolean;
+  has_active_product: boolean;
+  team_count: number;
+}
+
+interface AnalysisResult {
+  threshold: number;
+  candidates: AnalysisCandidate[];
+}
+
 interface PlanBMember {
   id: number;
   user_id: number;
@@ -77,6 +95,13 @@ export default function AdminPlanB() {
   /* ── Search (matches) ── */
   const [matchSearch, setMatchSearch] = useState("");
 
+  /* ── Analyse Plan B ── */
+  const [showAnalyse,    setShowAnalyse]    = useState(false);
+  const [threshold,      setThreshold]      = useState("20000");
+  const [analyseResult,  setAnalyseResult]  = useState<AnalysisResult | null>(null);
+  const [analyseLoading, setAnalyseLoading] = useState(false);
+  const [selectedIds,    setSelectedIds]    = useState<Set<number>>(new Set());
+
   /* ── Data ── */
   const { data: members = [], isLoading: membersLoading } = useQuery<PlanBMember[]>({
     queryKey: ["/api/admin/plan-b/users"],
@@ -96,6 +121,61 @@ export default function AdminPlanB() {
   const { data: planBMatches = [], isLoading: matchesLoading } = useQuery<AdminMatch[]>({
     queryKey: ["/api/admin/plan-b/matches"],
   });
+
+  /* ── Analyse: lancer le scan ── */
+  const runAnalyse = async () => {
+    setAnalyseLoading(true);
+    setAnalyseResult(null);
+    setSelectedIds(new Set());
+    try {
+      const res = await fetch(`/api/admin/plan-b/analyse?threshold=${encodeURIComponent(threshold)}`, { credentials: "include" });
+      const data: AnalysisResult = await res.json();
+      setAnalyseResult(data);
+    } catch {
+      toast({ title: "Erreur", description: "Impossible de lancer l'analyse", variant: "destructive" });
+    } finally {
+      setAnalyseLoading(false);
+    }
+  };
+
+  const bulkAddMut = useMutation({
+    mutationFn: async (userIds: number[]) => {
+      const res = await apiRequest("POST", "/api/admin/plan-b/bulk-add", { userIds });
+      if (!res.ok) { const d = await res.json(); throw new Error(d.message || "Erreur"); }
+      return res.json();
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/plan-b/users"] });
+      toast({ title: `✅ ${data.added} compte(s) autorisé(s) au Plan B !` });
+      // Retirer les IDs ajoutés de la liste candidates
+      if (analyseResult) {
+        const addedSet = new Set(Array.from(selectedIds));
+        setAnalyseResult(prev => prev ? {
+          ...prev,
+          candidates: prev.candidates.filter(c => !addedSet.has(c.id)),
+        } : null);
+      }
+      setSelectedIds(new Set());
+    },
+    onError: (e: any) => toast({ title: "Erreur", description: e.message, variant: "destructive" }),
+  });
+
+  const toggleSelect = (id: number) => {
+    setSelectedIds(prev => {
+      const n = new Set(prev);
+      n.has(id) ? n.delete(id) : n.add(id);
+      return n;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    if (!analyseResult) return;
+    if (selectedIds.size === analyseResult.candidates.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(analyseResult.candidates.map(c => c.id)));
+    }
+  };
 
   /* ── Mutations ── */
   const addMut = useMutation({
@@ -148,15 +228,154 @@ export default function AdminPlanB() {
     <div className="space-y-6">
 
       {/* ── Header ──────────────────────────────────────────────────────────── */}
-      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-        <Crown size={22} color="#D97706" />
-        <div>
-          <h2 className="text-lg font-bold">Liste Plan B — Accès exclusif</h2>
-          <p className="text-xs text-muted-foreground">
-            Les membres de cette liste peuvent parier sur les matchs marqués « VIP ». En cas de perte sur ces matchs, aucun remboursement.
-          </p>
+      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <Crown size={22} color="#D97706" />
+          <div>
+            <h2 className="text-lg font-bold">Liste Plan B — Accès exclusif</h2>
+            <p className="text-xs text-muted-foreground">
+              Les membres de cette liste peuvent parier sur les matchs marqués « VIP ». En cas de perte sur ces matchs, aucun remboursement.
+            </p>
+          </div>
         </div>
+        <Button
+          size="sm"
+          className="bg-blue-600 hover:bg-blue-700 text-white flex-shrink-0"
+          onClick={() => { setShowAnalyse(true); runAnalyse(); }}
+        >
+          <ScanSearch className="w-4 h-4 mr-1" />
+          Analyse Plan B
+        </Button>
       </div>
+
+      {/* ══════════════════════════════════════════════════════════════════════
+          DIALOG — Analyse Plan B (solde > seuil)
+      ══════════════════════════════════════════════════════════════════════ */}
+      <Dialog open={showAnalyse} onOpenChange={setShowAnalyse}>
+        <DialogContent className="max-w-lg max-h-[92vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <ScanSearch className="w-5 h-5 text-blue-600" />
+              Analyse Plan B — Comptes éligibles
+            </DialogTitle>
+          </DialogHeader>
+
+          {/* Paramètre seuil */}
+          <div className="flex items-center gap-2 bg-blue-50 border border-blue-200 rounded-xl p-3">
+            <Wallet className="w-4 h-4 text-blue-600 flex-shrink-0" />
+            <span className="text-xs text-blue-700 flex-shrink-0">Solde minimum :</span>
+            <input
+              type="number"
+              value={threshold}
+              onChange={e => setThreshold(e.target.value)}
+              className="h-7 text-sm border rounded px-2 w-28 text-center"
+              min="0"
+              step="1000"
+            />
+            <span className="text-xs text-blue-700">F</span>
+            <Button size="sm" variant="outline" className="h-7 text-xs ml-auto" onClick={runAnalyse} disabled={analyseLoading}>
+              {analyseLoading ? "…" : "Actualiser"}
+            </Button>
+          </div>
+
+          {/* Résultats */}
+          {analyseLoading ? (
+            <div className="flex flex-col items-center justify-center py-10 gap-3">
+              <div className="w-8 h-8 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin" />
+              <p className="text-sm text-muted-foreground">Analyse en cours…</p>
+            </div>
+          ) : analyseResult ? (
+            analyseResult.candidates.length === 0 ? (
+              <div className="text-center py-10 text-muted-foreground">
+                <ScanSearch className="w-10 h-10 mx-auto mb-2 opacity-30" />
+                <p className="text-sm">Aucun compte avec plus de {parseFloat(threshold).toLocaleString("fr-FR")} F<br/>non encore membre Plan B.</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {/* Résumé + sélection */}
+                <div className="flex items-center justify-between bg-blue-50 rounded-xl px-3 py-2">
+                  <p className="text-sm font-semibold text-blue-800">
+                    <span className="text-2xl font-black">{analyseResult.candidates.length}</span> compte(s) éligible(s)
+                  </p>
+                  <button
+                    className="text-xs text-blue-600 underline"
+                    onClick={toggleSelectAll}
+                  >
+                    {selectedIds.size === analyseResult.candidates.length ? "Tout désélectionner" : "Tout sélectionner"}
+                  </button>
+                </div>
+
+                {/* Liste des candidats */}
+                <div className="space-y-2">
+                  {analyseResult.candidates.map(c => {
+                    const sel = selectedIds.has(c.id);
+                    return (
+                      <div
+                        key={c.id}
+                        onClick={() => toggleSelect(c.id)}
+                        style={{
+                          display: "flex", alignItems: "center", gap: 10,
+                          padding: "10px 12px", borderRadius: 10, cursor: "pointer",
+                          border: `2px solid ${sel ? "#2563EB" : "#E5E7EB"}`,
+                          background: sel ? "#EFF6FF" : "#fff",
+                          transition: "all 0.15s",
+                        }}
+                      >
+                        {/* Checkbox visuel */}
+                        <div style={{
+                          width: 20, height: 20, borderRadius: 6, flexShrink: 0,
+                          border: `2px solid ${sel ? "#2563EB" : "#D1D5DB"}`,
+                          background: sel ? "#2563EB" : "#fff",
+                          display: "flex", alignItems: "center", justifyContent: "center",
+                        }}>
+                          {sel && <CheckCheck size={12} color="white" />}
+                        </div>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <p style={{ fontWeight: 700, fontSize: 14, margin: 0, display: "flex", alignItems: "center", gap: 6 }}>
+                            {c.full_name}
+                            {c.has_active_product && (
+                              <span style={{ fontSize: 10, background: "#D1FAE5", color: "#065F46", borderRadius: 4, padding: "1px 5px" }}>✓ Produit</span>
+                            )}
+                          </p>
+                          <p style={{ fontSize: 12, color: "#6B7280", margin: 0 }}>
+                            📱 {c.phone} · 🌍 {c.country}
+                          </p>
+                          <p style={{ fontSize: 11, color: "#9CA3AF", margin: 0 }}>
+                            👥 {c.team_count} filleul(s) · 🔗 {c.referral_code}
+                          </p>
+                        </div>
+                        {/* Solde */}
+                        <div style={{ textAlign: "right", flexShrink: 0 }}>
+                          <p style={{ fontWeight: 800, fontSize: 15, color: "#16A34A", margin: 0 }}>
+                            {parseFloat(c.balance).toLocaleString("fr-FR")} F
+                          </p>
+                          <p style={{ fontSize: 10, color: "#9CA3AF", margin: 0 }}>solde</p>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )
+          ) : null}
+
+          <DialogFooter className="gap-2 mt-2">
+            <Button variant="outline" onClick={() => setShowAnalyse(false)}>Fermer</Button>
+            <Button
+              className="bg-blue-600 hover:bg-blue-700 text-white"
+              disabled={selectedIds.size === 0 || bulkAddMut.isPending}
+              onClick={() => bulkAddMut.mutate(Array.from(selectedIds))}
+            >
+              {bulkAddMut.isPending ? (
+                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
+              ) : (
+                <Zap className="w-4 h-4 mr-2" />
+              )}
+              Autoriser Plan B ({selectedIds.size} sélectionné{selectedIds.size > 1 ? "s" : ""})
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* ── Stats summary ─────────────────────────────────────────────────── */}
       <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>

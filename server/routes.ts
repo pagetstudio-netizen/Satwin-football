@@ -2300,6 +2300,50 @@ export async function registerRoutes(
     }
   });
 
+  /** Analyse — users with balance > 20 000 F not yet in Plan B */
+  app.get("/api/admin/plan-b/analyse", requireAdmin, async (req, res) => {
+    try {
+      const threshold = parseFloat((req.query.threshold as string) || "20000");
+      const rows = await db.execute(sql`
+        SELECT u.id, u.full_name, u.phone, u.country, u.balance, u.referral_code,
+               u.has_deposited, u.has_active_product,
+               (SELECT COUNT(*) FROM users ref WHERE ref.referred_by = u.referral_code)::int AS team_count
+        FROM users u
+        WHERE CAST(u.balance AS NUMERIC) >= ${threshold}
+          AND u.is_admin = false
+          AND u.is_banned = false
+          AND u.id NOT IN (SELECT user_id FROM plan_b_users)
+        ORDER BY CAST(u.balance AS NUMERIC) DESC
+      `);
+      const list = ((rows as any)?.rows ?? rows);
+      res.json({ threshold, candidates: list });
+    } catch (e: any) {
+      serverError(res, e);
+    }
+  });
+
+  /** Add multiple users to Plan B in bulk */
+  app.post("/api/admin/plan-b/bulk-add", requireAdmin, async (req, res) => {
+    try {
+      const { userIds } = req.body as { userIds: number[] };
+      if (!Array.isArray(userIds) || userIds.length === 0)
+        return res.status(400).json({ message: "userIds[] requis" });
+
+      let added = 0;
+      for (const uid of userIds) {
+        const [existing] = await db.select().from(planBUsers).where(eqOp(planBUsers.userId, uid));
+        if (existing) continue;
+        await db.insert(planBUsers).values({ userId: uid, addedBy: req.session.userId });
+        added++;
+      }
+      await storage.logAdminAction(req.session.userId!, "plan_b_bulk_add", null,
+        `Ajout en masse : ${added} utilisateur(s) ajouté(s) au Plan B`);
+      res.json({ success: true, added });
+    } catch (e: any) {
+      serverError(res, e);
+    }
+  });
+
   /** List matches eligible for Plan B (active, not finished) */
   app.get("/api/admin/plan-b/matches", requireAdmin, async (req, res) => {
     try {
