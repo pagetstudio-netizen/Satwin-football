@@ -2323,6 +2323,7 @@ export async function registerRoutes(
   app.get("/api/admin/plan-b/analyse", requireAdmin, async (req, res) => {
     try {
       const threshold = parseFloat((req.query.threshold as string) || "20000");
+      // Fetch all non-admin non-banned users with balance >= threshold
       const result = await db.execute(sql`
         SELECT u.id, u.full_name, u.phone, u.country, u.balance, u.referral_code,
                u.has_deposited, u.has_active_product,
@@ -2331,17 +2332,29 @@ export async function registerRoutes(
         WHERE CAST(u.balance AS NUMERIC) >= ${threshold}
           AND u.is_admin = false
           AND u.is_banned = false
-          AND u.id NOT IN (SELECT user_id FROM plan_b_users)
         ORDER BY CAST(u.balance AS NUMERIC) DESC
       `);
-      const list: any[] = Array.isArray((result as any).rows)
+      const allCandidates: any[] = Array.isArray((result as any).rows)
         ? (result as any).rows
         : Array.isArray(result)
           ? result as any[]
           : [];
+
+      // Exclude users already in plan_b_users (safe even if table is empty)
+      let planBIds = new Set<number>();
+      try {
+        const pbResult = await db.execute(sql`SELECT user_id FROM plan_b_users`);
+        const pbRows: any[] = Array.isArray((pbResult as any).rows)
+          ? (pbResult as any).rows
+          : Array.isArray(pbResult) ? pbResult as any[] : [];
+        planBIds = new Set(pbRows.map((r: any) => Number(r.user_id)));
+      } catch { /* table may not exist yet */ }
+
+      const list = allCandidates.filter(u => !planBIds.has(Number(u.id)));
       res.json({ threshold, candidates: list });
     } catch (e: any) {
-      serverError(res, e);
+      console.error("[plan-b/analyse error]", e?.message || e);
+      res.status(500).json({ message: String(e?.message || "Erreur serveur") });
     }
   });
 
