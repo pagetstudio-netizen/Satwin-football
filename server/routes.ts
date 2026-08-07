@@ -3122,6 +3122,7 @@ export async function registerRoutes(
       const [match] = await db.select().from(matches).where(eqOp(matches.id, parseInt(matchId)));
       if (!match || !match.isActive) return res.status(404).json({ message: "Match introuvable ou inactif" });
       if (match.status === "finished" || match.status === "cancelled") return res.status(400).json({ message: "Ce match est terminé" });
+      if (match.status === "live") return res.status(400).json({ message: "Ce match est déjà en cours — les paris sont fermés." });
       if (betAmount < match.minBet) return res.status(400).json({ message: `Mise minimale: ${match.minBet} F` });
       if (betAmount > match.maxBet) return res.status(400).json({ message: `Mise maximale: ${match.maxBet} F` });
 
