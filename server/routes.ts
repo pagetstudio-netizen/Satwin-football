@@ -2284,6 +2284,20 @@ export async function registerRoutes(
     }
   });
 
+  /** Vider TOUTE la liste Plan B */
+  app.delete("/api/admin/plan-b/users", requireAdmin, async (req, res) => {
+    try {
+      const countRows = await db.execute(sql`SELECT COUNT(*)::int AS n FROM plan_b_users`);
+      const count = Number(((countRows as any)?.rows ?? countRows)[0]?.n ?? 0);
+      await db.execute(sql`DELETE FROM plan_b_users`);
+      await storage.logAdminAction(req.session.userId!, "plan_b_clear_all", null,
+        `Liste Plan B vidée — ${count} membre(s) supprimé(s)`);
+      res.json({ success: true, removed: count });
+    } catch (e: any) {
+      serverError(res, e);
+    }
+  });
+
   /** Toggle isVipOnly on a match */
   app.post("/api/admin/plan-b/matches/:id/toggle-vip", requireAdmin, async (req, res) => {
     try {
@@ -3418,15 +3432,16 @@ export async function registerRoutes(
       // @ts-ignore
       const isVipOnly  = (match as any).isVipOnly  ?? false;
 
+      // Résultat global du match (pour la colonne matches.result)
       let matchResult: string;
       if (!scored) {
-        matchResult = "won";         // real ≠ predicted → users win
+        matchResult = "won";         // real ≠ predicted → tous gagnent
       } else if (isVipOnly) {
-        matchResult = "refunded";    // Plan B match → admin garantit → remboursement
+        matchResult = "plan_b";      // Plan B → remboursement différencié par parieur
       } else if (isFeatured) {
-        matchResult = "refunded";    // real = predicted + match du jour → remboursement
+        matchResult = "refunded";    // match du jour → remboursement de tous
       } else {
-        matchResult = "lost";        // real = predicted + match ordinaire → perte
+        matchResult = "lost";        // match ordinaire → perte pour tous
       }
 
       await db.update(matches).set({ realScore, result: matchResult, status: "finished" }).where(eqOp(matches.id, id));
@@ -3434,12 +3449,31 @@ export async function registerRoutes(
       const pendingBets = await db.select().from(bets)
         .where(andOp(eqOp(bets.matchId, id), eqOp(bets.status, "pending")));
 
+      // Charger la liste Plan B une seule fois
+      const planBRows = await db.execute(sql`SELECT user_id FROM plan_b_users`);
+      const planBSet = new Set(((planBRows as any)?.rows ?? planBRows).map((r: any) => Number(r.user_id)));
+
       let settled = 0;
       const profitRate = parseFloat(match.profitRate);
 
       for (const bet of pendingBets) {
         const betAmount = parseFloat(bet.amount);
+        const isBettorPlanB = planBSet.has(bet.userId);
+
+        // Déterminer le résultat pour CE parieur
+        let betOutcome: "won" | "refunded" | "lost";
         if (matchResult === "won") {
+          betOutcome = "won";
+        } else if (matchResult === "refunded") {
+          betOutcome = "refunded";
+        } else if (matchResult === "plan_b") {
+          // Seuls les membres Plan B sont remboursés ; les autres perdent
+          betOutcome = isBettorPlanB ? "refunded" : "lost";
+        } else {
+          betOutcome = "lost";
+        }
+
+        if (betOutcome === "won") {
           const profit = betAmount * profitRate / 100;
           const totalReturn = betAmount + profit;
           await db.update(bets).set({ status: "won", profit: profit.toFixed(2), settledAt: new Date() }).where(eqOp(bets.id, bet.id));
@@ -3450,17 +3484,20 @@ export async function registerRoutes(
               todayEarnings: (parseFloat(u.todayEarnings) + profit).toFixed(2),
               totalEarnings: (parseFloat(u.totalEarnings) + profit).toFixed(2),
             });
-            await storage.createTransaction({ userId: bet.userId, type: "bet_win", amount: totalReturn.toFixed(2), description: `Gain: ${match.homeTeam} vs ${match.awayTeam} — score réel ${realScore} ≠ ${match.predictedScore} +${profit.toFixed(0)}F` });
+            await storage.createTransaction({ userId: bet.userId, type: "bet_win", amount: totalReturn.toFixed(2),
+              description: `Gain: ${match.homeTeam} vs ${match.awayTeam} — score réel ${realScore} ≠ ${match.predictedScore} +${profit.toFixed(0)}F` });
           }
-        } else if (matchResult === "refunded") {
+        } else if (betOutcome === "refunded") {
           await db.update(bets).set({ status: "refunded", profit: "0", settledAt: new Date() }).where(eqOp(bets.id, bet.id));
           const u = await storage.getUser(bet.userId);
           if (u) {
             await storage.updateUser(bet.userId, { balance: (parseFloat(u.balance) + betAmount).toFixed(2) });
-            await storage.createTransaction({ userId: bet.userId, type: "bet_refund", amount: betAmount.toFixed(2), description: `Remboursement (match du jour): ${match.homeTeam} vs ${match.awayTeam} — score ${realScore} = prédit` });
+            const reason = matchResult === "plan_b" ? "Plan B" : "match du jour";
+            await storage.createTransaction({ userId: bet.userId, type: "bet_refund", amount: betAmount.toFixed(2),
+              description: `Remboursement (${reason}): ${match.homeTeam} vs ${match.awayTeam} — score ${realScore} = prédit` });
           }
         } else {
-          // matchResult === "lost" — ordinary match, platform wins, no refund
+          // lost
           await db.update(bets).set({ status: "lost", profit: "0", settledAt: new Date() }).where(eqOp(bets.id, bet.id));
         }
         settled++;
@@ -3529,23 +3566,33 @@ export async function registerRoutes(
 
         if (isFinished(fixture.statusShort) && row.status !== "finished") {
           // ── PARIS RENVERSÉ auto-settle ──────────────────────────────────────
-          // Score réel ≠ prédit → users WIN | = prédit + featured → REFUND | = prédit + ordinary → LOSE
+          // Score réel ≠ prédit → tous GAGNENT
+          // Score réel = prédit :
+          //   isVipOnly (Plan B) → membres Plan B REMBOURSÉS, autres PERDENT
+          //   isFeatured         → tous REMBOURSÉS
+          //   ordinaire          → tous PERDENT
           const realScore = `${fixture.goalsHome}-${fixture.goalsAway}`;
           const scored = realScore.trim() === (row.predicted_score ?? "").trim();
-          const isFeatured = !!row.is_featured;
+          const isFeatured    = !!row.is_featured;
           const isVipOnlyLive = !!row.is_vip_only;
-          let matchResult: string;
-          if (!scored)                         matchResult = "won";
-          else if (isVipOnlyLive || isFeatured) matchResult = "refunded"; // Plan B ou match du jour → remboursement
-          else                                  matchResult = "lost";
 
-          // Sanitize before interpolation: realScore = "N-N" digits only, matchResult = enum word
-          const safeRealScore = realScore.replace(/[^0-9\-]/g, "").slice(0, 10);
-          const safeMatchResult = ["won","refunded","lost"].includes(matchResult) ? matchResult : "lost";
+          let matchResult: string;
+          if (!scored)          matchResult = "won";
+          else if (isVipOnlyLive) matchResult = "plan_b";   // différencié par parieur
+          else if (isFeatured)  matchResult = "refunded";
+          else                  matchResult = "lost";
+
+          // Sanitize before interpolation
+          const safeRealScore  = realScore.replace(/[^0-9\-]/g, "").slice(0, 10);
+          const safeMatchResult = ["won","plan_b","refunded","lost"].includes(matchResult) ? matchResult : "lost";
           await db.execute(
             // @ts-ignore
             `UPDATE matches SET real_score = '${safeRealScore}', result = '${safeMatchResult}', status = 'finished', live_score = NULL WHERE id = ${Number(row.id)}`
           );
+
+          // Charger liste Plan B pour ce settle
+          const pbRowsLive = await db.execute(sql`SELECT user_id FROM plan_b_users`);
+          const planBSetLive = new Set(((pbRowsLive as any)?.rows ?? pbRowsLive).map((r: any) => Number(r.user_id)));
 
           // Settle pending bets
           const pendingBets = await db.select().from(bets)
@@ -3554,7 +3601,15 @@ export async function registerRoutes(
           const profitRate = parseFloat(row.profit_rate);
           for (const bet of pendingBets) {
             const betAmount = parseFloat(bet.amount);
-            if (matchResult === "won") {
+            const isBettorPlanB = planBSetLive.has(bet.userId);
+
+            let betOutcome: "won" | "refunded" | "lost";
+            if (matchResult === "won")      betOutcome = "won";
+            else if (matchResult === "refunded") betOutcome = "refunded";
+            else if (matchResult === "plan_b")   betOutcome = isBettorPlanB ? "refunded" : "lost";
+            else                                 betOutcome = "lost";
+
+            if (betOutcome === "won") {
               const profit = betAmount * profitRate / 100;
               const total  = betAmount + profit;
               await db.update(bets).set({ status: "won", profit: profit.toFixed(2), settledAt: new Date() })
@@ -3571,19 +3626,20 @@ export async function registerRoutes(
                   description: `Gain auto: ${row.home_team} vs ${row.away_team} — ${realScore} ≠ ${row.predicted_score} +${profit.toFixed(0)}F`,
                 });
               }
-            } else if (matchResult === "refunded") {
+            } else if (betOutcome === "refunded") {
               await db.update(bets).set({ status: "refunded", profit: "0", settledAt: new Date() })
                 .where(eqOp(bets.id, bet.id));
               const u = await storage.getUser(bet.userId);
               if (u) {
                 await storage.updateUser(bet.userId, { balance: (parseFloat(u.balance) + betAmount).toFixed(2) });
+                const reason = matchResult === "plan_b" ? "Plan B" : "match du jour";
                 await storage.createTransaction({
                   userId: bet.userId, type: "bet_refund", amount: betAmount.toFixed(2),
-                  description: `Remboursement (match du jour): ${row.home_team} vs ${row.away_team}`,
+                  description: `Remboursement auto (${reason}): ${row.home_team} vs ${row.away_team}`,
                 });
               }
             } else {
-              // lost — ordinary match, platform wins, no refund
+              // lost
               await db.update(bets).set({ status: "lost", profit: "0", settledAt: new Date() })
                 .where(eqOp(bets.id, bet.id));
             }

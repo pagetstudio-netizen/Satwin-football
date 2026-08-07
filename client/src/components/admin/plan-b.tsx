@@ -11,8 +11,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { Search, UserPlus, UserMinus, Crown, Shield, Lock, Unlock, X, ScanSearch, Zap, Wallet, CheckCheck } from "lucide-react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Search, UserPlus, UserMinus, Crown, Shield, Lock, Unlock, X, ScanSearch, Zap, Wallet, CheckCheck, Trash2, AlertTriangle } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 
 /* ── Types ─────────────────────────────────────────────────────────────────── */
 interface AnalysisCandidate {
@@ -95,6 +95,9 @@ export default function AdminPlanB() {
   /* ── Search (matches) ── */
   const [matchSearch, setMatchSearch] = useState("");
 
+  /* ── Vider la liste ── */
+  const [showClearAll, setShowClearAll] = useState(false);
+
   /* ── Analyse Plan B ── */
   const [showAnalyse,    setShowAnalyse]    = useState(false);
   const [threshold,      setThreshold]      = useState("20000");
@@ -120,6 +123,21 @@ export default function AdminPlanB() {
 
   const { data: planBMatches = [], isLoading: matchesLoading } = useQuery<AdminMatch[]>({
     queryKey: ["/api/admin/plan-b/matches"],
+  });
+
+  /* ── Vider toute la liste Plan B ── */
+  const clearAllMut = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("DELETE", "/api/admin/plan-b/users");
+      if (!res.ok) { const d = await res.json(); throw new Error(d.message || "Erreur"); }
+      return res.json();
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/plan-b/users"] });
+      setShowClearAll(false);
+      toast({ title: `🗑️ Liste Plan B vidée — ${data.removed} membre(s) supprimé(s)` });
+    },
+    onError: (e: any) => toast({ title: "Erreur", description: e.message, variant: "destructive" }),
   });
 
   /* ── Analyse: lancer le scan ── */
@@ -238,15 +256,81 @@ export default function AdminPlanB() {
             </p>
           </div>
         </div>
-        <Button
-          size="sm"
-          className="bg-blue-600 hover:bg-blue-700 text-white flex-shrink-0"
-          onClick={() => { setShowAnalyse(true); runAnalyse(); }}
-        >
-          <ScanSearch className="w-4 h-4 mr-1" />
-          Analyse Plan B
-        </Button>
+        <div className="flex gap-2 flex-shrink-0">
+          <Button
+            size="sm"
+            variant="outline"
+            className="text-destructive border-destructive/40 hover:bg-destructive/10"
+            onClick={() => setShowClearAll(true)}
+            disabled={members.length === 0}
+          >
+            <Trash2 className="w-4 h-4 mr-1" />
+            Vider la liste
+          </Button>
+          <Button
+            size="sm"
+            className="bg-blue-600 hover:bg-blue-700 text-white"
+            onClick={() => { setShowAnalyse(true); runAnalyse(); }}
+          >
+            <ScanSearch className="w-4 h-4 mr-1" />
+            Analyse Plan B
+          </Button>
+        </div>
       </div>
+
+      {/* ── Règle Plan B ── */}
+      <div style={{ borderRadius: 12, background: "#FFF8E8", border: "2px solid #FCD34D", padding: "12px 16px" }}>
+        <p style={{ fontSize: 12, fontWeight: 700, color: "#92400E", marginBottom: 8, display: "flex", alignItems: "center", gap: 6 }}>
+          <Shield size={14} color="#D97706" /> Règle Plan B — Comment le remboursement fonctionne
+        </p>
+        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12 }}>
+            <span style={{ background: "#D97706", color: "white", borderRadius: 4, padding: "2px 8px", fontWeight: 700, flexShrink: 0 }}>👑 Plan B</span>
+            <span style={{ color: "#78350F" }}>Si un match VIP est <strong>perdu</strong> (score = prédit) → le membre Plan B est <strong>remboursé</strong> automatiquement.</span>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12 }}>
+            <span style={{ background: "#6B7280", color: "white", borderRadius: 4, padding: "2px 8px", fontWeight: 700, flexShrink: 0 }}>👤 Standard</span>
+            <span style={{ color: "#78350F" }}>Si un match VIP est <strong>perdu</strong> par un utilisateur non-Plan B → <strong>aucun remboursement</strong>.</span>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12 }}>
+            <span style={{ background: "#16A34A", color: "white", borderRadius: 4, padding: "2px 8px", fontWeight: 700, flexShrink: 0 }}>✅ Gagné</span>
+            <span style={{ color: "#78350F" }}>Score réel ≠ score prédit → <strong>tous les parieurs gagnent</strong> (Plan B ou non).</span>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Dialog confirmation — Vider la liste ── */}
+      <Dialog open={showClearAll} onOpenChange={setShowClearAll}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-destructive">
+              <AlertTriangle className="w-5 h-5" />
+              Vider la liste Plan B
+            </DialogTitle>
+            <DialogDescription>
+              Cette action retirera <strong>tous les {members.length} membres</strong> de la liste Plan B. 
+              Ils ne seront plus remboursés sur les matchs VIP en cas de perte.
+            </DialogDescription>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground bg-amber-50 border border-amber-200 rounded-xl p-3">
+            ⚠️ Action irréversible. Les paris déjà en cours sur des matchs VIP ne seront pas affectés 
+            (le statut Plan B est vérifié au moment du règlement du match).
+          </p>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setShowClearAll(false)}>Annuler</Button>
+            <Button
+              variant="destructive"
+              onClick={() => clearAllMut.mutate()}
+              disabled={clearAllMut.isPending}
+            >
+              {clearAllMut.isPending
+                ? <><div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />Suppression…</>
+                : <><Trash2 className="w-4 h-4 mr-2" />Vider la liste ({members.length})</>
+              }
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* ══════════════════════════════════════════════════════════════════════
           DIALOG — Analyse Plan B (solde > seuil)
