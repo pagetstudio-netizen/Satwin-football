@@ -571,7 +571,7 @@ export class DatabaseStorage implements IStorage {
     if (!user || !user.referredBy) return;
 
     const settings = await this.getSettings();
-    const level1Rate = parseFloat(settings.depositCommissionLevel1 || "5") / 100;
+    const level1Rate = parseFloat(settings.depositCommissionLevel1 || "15") / 100;
     const level2Rate = parseFloat(settings.depositCommissionLevel2 || "2") / 100;
     const level3Rate = parseFloat(settings.depositCommissionLevel3 || "1") / 100;
 

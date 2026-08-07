@@ -146,7 +146,7 @@ export default function AdminSettings({ isSuperAdmin }: AdminSettingsProps) {
         ashtechpayCountries: settings.ashtechpayCountries || "",
         depositBonusEnabled: settings.depositBonusEnabled === "true",
         depositBonusPercent: settings.depositBonusPercent || "5",
-        depositBonusDays: settings.depositBonusDays || "2,3,5",
+        depositBonusDays: settings.depositBonusDays || "1,3,5",
       });
     }
   }, [settings, form]);
@@ -644,7 +644,7 @@ export default function AdminSettings({ isSuperAdmin }: AdminSettingsProps) {
             <FormField control={form.control} name="depositBonusDays" render={({ field }) => (
               <FormItem>
                 <FormLabel>Jours actifs</FormLabel>
-                <FormControl><Input {...field} placeholder="2,3,5" /></FormControl>
+                <FormControl><Input {...field} placeholder="1,3,5" /></FormControl>
                 <FormDescription className="text-xs">
                   Numéros des jours séparés par virgule : <code className="bg-gray-100 px-1 rounded">0</code>=Dim,
                   <code className="bg-gray-100 px-1 rounded">1</code>=Lun,
@@ -653,7 +653,7 @@ export default function AdminSettings({ isSuperAdmin }: AdminSettingsProps) {
                   <code className="bg-gray-100 px-1 rounded">4</code>=Jeu,
                   <code className="bg-gray-100 px-1 rounded">5</code>=Ven,
                   <code className="bg-gray-100 px-1 rounded">6</code>=Sam.
-                  Par défaut : <code className="bg-gray-100 px-1 rounded">2,3,5</code> (Mar, Mer, Ven)
+                  Par défaut : <code className="bg-gray-100 px-1 rounded">1,3,5</code> (Lun, Mer, Ven)
                 </FormDescription>
                 <FormMessage />
               </FormItem>

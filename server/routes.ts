@@ -147,7 +147,7 @@ async function applyDepositBonus(userId: number, depositAmount: number, depositI
   try {
     const settings = await storage.getSettings();
     if (settings.depositBonusEnabled !== "true") return;
-    const allowedDays = (settings.depositBonusDays || "2,3,5")
+    const allowedDays = (settings.depositBonusDays || "1,3,5")
       .split(",").map((d: string) => parseInt(d.trim(), 10)).filter((n: number) => !isNaN(n));
     const today = new Date().getDay(); // 0=dim,1=lun,2=mar,3=mer,4=jeu,5=ven,6=sam
     if (!allowedDays.includes(today)) return;
