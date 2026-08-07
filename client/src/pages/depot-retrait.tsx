@@ -162,15 +162,6 @@ function DepotForm({ currency, minDeposit }: { currency: string; minDeposit: num
       ) : (
         /* USDT-OFFLINE */
         <div style={{ padding: "0 14px" }}>
-          <div style={{ borderBottom: "1px solid #f3f4f6", padding: "12px 0" }}>
-            <button style={{ width: "100%", background: "none", border: "none", cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <span style={{ color: "#6b7280", fontSize: 13 }}>SÉLECTIONNER USDT</span>
-              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                <span style={{ color: "#9ca3af", fontSize: 13 }}>Sélectionner</span>
-                <ChevronRight size={15} color="#9ca3af" />
-              </div>
-            </button>
-          </div>
           <div style={{ borderBottom: "1px solid #f3f4f6", padding: "12px 0", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <span style={{ color: "#6b7280", fontSize: 13 }}>Délai de dépôt</span>
             <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
@@ -184,9 +175,9 @@ function DepotForm({ currency, minDeposit }: { currency: string; minDeposit: num
               style={{ width: "100%", boxSizing: "border-box", border: "1.5px solid #059669", borderRadius: 6, padding: "10px 14px", fontSize: 18, fontWeight: 700, outline: "none" }} />
           </div>
           <div style={{ marginBottom: 12 }}>
-            <div style={{ color: "#374151", fontSize: 13, fontWeight: 600, marginBottom: 8 }}>Montant du dépôt(USDT)</div>
+            <div style={{ color: "#374151", fontSize: 13, fontWeight: 600, marginBottom: 8 }}>Montant du dépôt (USDT)</div>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-              {QUICK_AMOUNTS.map(v => (
+              {[10, 20, 50, 100, 500].map(v => (
                 <QuickBtn key={v} val={v} selected={String(v) === amount} onSelect={() => setAmount(String(v))} />
               ))}
             </div>
@@ -198,12 +189,12 @@ function DepotForm({ currency, minDeposit }: { currency: string; minDeposit: num
             (Reference exchange rate: 1 USDT ≈ 650 {currency})
           </p>
           <p style={{ color: "#6b7280", fontSize: 12, marginBottom: 20, lineHeight: 1.6 }}>
-            Veuillez lire le <span style={{ color: GREEN, textDecoration: "underline" }}>Règles de recharge</span>recharge.readRuleBehind
+            Minimum de dépôt : <strong>10 USDT</strong>
           </p>
           <button
             onClick={() => {
-              if (!amount || Number(amount) <= 0)
-                return toast({ title: "Montant invalide", description: "Entrez un montant en USDT", variant: "destructive" });
+              if (!amount || Number(amount) < 10)
+                return toast({ title: "Montant invalide", description: "Minimum 10 USDT", variant: "destructive" });
               navigate(`/ashtechpay-crypto?amount=${Number(amount)}&currency=USDT`);
             }}
             style={{ width: "100%", background: GREEN, color: "white", border: "none", borderRadius: 8, padding: "15px", fontWeight: 800, fontSize: 16, cursor: "pointer" }}>
