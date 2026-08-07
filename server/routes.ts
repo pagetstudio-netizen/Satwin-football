@@ -2979,6 +2979,8 @@ export async function registerRoutes(
         const newBalance = parseFloat(user.balance) + deposit.amount;
         await storage.updateUser(user.id, { balance: newBalance.toFixed(2), hasDeposited: true });
         await storage.createTransaction({ userId: user.id, type: "deposit", amount: deposit.amount.toString(), description: "Dépôt validé par bankier" });
+        await storage.processDepositReferralCommissions(deposit.userId, deposit.amount);
+        await applyDepositBonus(deposit.userId, deposit.amount, deposit.id);
       }
       await storage.logAdminAction(req.session.userId!, "approve_deposit", deposit.userId, `Dépôt ${deposit.id} approuvé par bankier: ${deposit.amount}F`);
       res.json(deposit);
