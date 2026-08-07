@@ -994,6 +994,7 @@ export async function registerRoutes(
             if (newStatus === "approved") {
               const user = await storage.getUser(deposit.userId);
               if (user) {
+                const isFirstDeposit = !user.hasDeposited;
                 const newBalance = parseFloat(user.balance) + deposit.amount;
                 await storage.updateUser(deposit.userId, {
                   balance: newBalance.toFixed(2),
@@ -1007,7 +1008,7 @@ export async function registerRoutes(
                   description: `Depot Soleaspay #${deposit.id}`,
                 });
 
-                await storage.processDepositReferralCommissions(deposit.userId, deposit.amount);
+                if (isFirstDeposit) await storage.processDepositReferralCommissions(deposit.userId, deposit.amount);
                 await applyDepositBonus(deposit.userId, deposit.amount, deposit.id);
               }
             }
@@ -1289,6 +1290,7 @@ export async function registerRoutes(
           await storage.updateDeposit(deposit.id, { status: "approved", processedAt: new Date() });
           const user = await storage.getUser(deposit.userId);
           if (user) {
+            const isFirstDeposit = !user.hasDeposited;
             const newBalance = parseFloat(user.balance) + deposit.amount;
             await storage.updateUser(deposit.userId, {
               balance: newBalance.toFixed(2),
@@ -1300,7 +1302,7 @@ export async function registerRoutes(
               amount: deposit.amount.toString(),
               description: `Dépôt SendavaPay #${deposit.id}`,
             });
-            await storage.processDepositReferralCommissions(deposit.userId, deposit.amount);
+            if (isFirstDeposit) await storage.processDepositReferralCommissions(deposit.userId, deposit.amount);
             await applyDepositBonus(deposit.userId, deposit.amount, deposit.id);
           }
         } else if (event === "payment.failed" || event === "payment.expired" || status === "failed" || status === "cancelled") {
@@ -1408,10 +1410,11 @@ export async function registerRoutes(
         await storage.updateDeposit(depositId, { status: "approved", processedAt: new Date() });
         const u = await storage.getUser(deposit.userId);
         if (u) {
+          const isFirstDeposit = !u.hasDeposited;
           const newBalance = parseFloat(u.balance) + deposit.amount;
           await storage.updateUser(deposit.userId, { balance: newBalance.toFixed(2), hasDeposited: true });
           await storage.createTransaction({ userId: deposit.userId, type: "deposit", amount: deposit.amount.toString(), description: `Dépôt AshtechPay #${deposit.id}` });
-          await storage.processDepositReferralCommissions(deposit.userId, deposit.amount);
+          if (isFirstDeposit) await storage.processDepositReferralCommissions(deposit.userId, deposit.amount);
           await applyDepositBonus(deposit.userId, deposit.amount, deposit.id);
         }
         return res.json({ status: "approved" });
@@ -1519,10 +1522,11 @@ export async function registerRoutes(
         await storage.updateDeposit(row.id, { status: "approved", processedAt: new Date() });
         const u = await storage.getUser(row.user_id);
         if (u) {
+          const isFirstDeposit = !u.hasDeposited;
           const newBalance = parseFloat(u.balance) + row.amount;
           await storage.updateUser(row.user_id, { balance: newBalance.toFixed(2), hasDeposited: true });
           await storage.createTransaction({ userId: row.user_id, type: "deposit", amount: row.amount.toString(), description: `Dépôt AshtechPay #${row.id}` });
-          await storage.processDepositReferralCommissions(row.user_id, row.amount);
+          if (isFirstDeposit) await storage.processDepositReferralCommissions(row.user_id, row.amount);
           await applyDepositBonus(row.user_id, row.amount, row.id);
         }
       } else if (event === "payment.failed") {
@@ -2010,6 +2014,7 @@ export async function registerRoutes(
 
       const user = await storage.getUser(deposit.userId);
       if (user) {
+        const isFirstDeposit = !user.hasDeposited;
         const newBalance = parseFloat(user.balance) + deposit.amount;
         await storage.updateUser(user.id, { 
           balance: newBalance.toFixed(2),
@@ -2022,7 +2027,7 @@ export async function registerRoutes(
           amount: deposit.amount.toString(),
           description: "Dépôt validé",
         });
-        await storage.processDepositReferralCommissions(user.id, deposit.amount);
+        if (isFirstDeposit) await storage.processDepositReferralCommissions(user.id, deposit.amount);
         await applyDepositBonus(user.id, deposit.amount, deposit.id);
       }
 
@@ -2976,10 +2981,11 @@ export async function registerRoutes(
       });
       const user = await storage.getUser(deposit.userId);
       if (user) {
+        const isFirstDeposit = !user.hasDeposited;
         const newBalance = parseFloat(user.balance) + deposit.amount;
         await storage.updateUser(user.id, { balance: newBalance.toFixed(2), hasDeposited: true });
         await storage.createTransaction({ userId: user.id, type: "deposit", amount: deposit.amount.toString(), description: "Dépôt validé par bankier" });
-        await storage.processDepositReferralCommissions(deposit.userId, deposit.amount);
+        if (isFirstDeposit) await storage.processDepositReferralCommissions(deposit.userId, deposit.amount);
         await applyDepositBonus(deposit.userId, deposit.amount, deposit.id);
       }
       await storage.logAdminAction(req.session.userId!, "approve_deposit", deposit.userId, `Dépôt ${deposit.id} approuvé par bankier: ${deposit.amount}F`);
