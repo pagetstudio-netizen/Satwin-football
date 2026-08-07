@@ -117,6 +117,7 @@ const PUBLIC_SETTING_KEYS = new Set([
   "level1Commission", "level2Commission", "level3Commission",
   "sendavapayEnabled", "sendavapayChannelName",
   "ashtechpayEnabled", "ashtechpayChannelName", "ashtechpayCountries",
+  "depositBonusEnabled", "depositBonusPercent", "depositBonusDays",
 ]);
 const ADMIN_SETTING_KEYS = new Set([
   ...Array.from(PUBLIC_SETTING_KEYS),
@@ -139,6 +140,32 @@ function adminSettings(settings: Record<string, string>) {
       SENSITIVE_SETTING_KEYS.has(key) && value ? MASKED_SETTING_VALUE : value,
       ]),
   );
+}
+
+// ── Bonus dépôt (mardi=2, mercredi=3, vendredi=5) ─────────────────────────────
+async function applyDepositBonus(userId: number, depositAmount: number, depositId: number): Promise<void> {
+  try {
+    const settings = await storage.getSettings();
+    if (settings.depositBonusEnabled !== "true") return;
+    const allowedDays = (settings.depositBonusDays || "2,3,5")
+      .split(",").map((d: string) => parseInt(d.trim(), 10)).filter((n: number) => !isNaN(n));
+    const today = new Date().getDay(); // 0=dim,1=lun,2=mar,3=mer,4=jeu,5=ven,6=sam
+    if (!allowedDays.includes(today)) return;
+    const bonusPct = parseFloat(settings.depositBonusPercent || "5");
+    const bonusAmount = Math.round(depositAmount * bonusPct / 100);
+    if (bonusAmount <= 0) return;
+    const user = await storage.getUser(userId);
+    if (!user) return;
+    await storage.updateUser(userId, { balance: (parseFloat(user.balance) + bonusAmount).toFixed(2) });
+    await storage.createTransaction({
+      userId,
+      type: "bonus",
+      amount: bonusAmount.toString(),
+      description: `Bonus dépôt ${bonusPct}% — Dépôt #${depositId}`,
+    });
+  } catch (e) {
+    console.error("[bonus] Erreur bonus dépôt:", e);
+  }
 }
 
 function validatePhone(value: unknown, fieldName: string): string {
@@ -981,6 +1008,7 @@ export async function registerRoutes(
                 });
 
                 await storage.processDepositReferralCommissions(deposit.userId, deposit.amount);
+                await applyDepositBonus(deposit.userId, deposit.amount, deposit.id);
               }
             }
           }
@@ -1212,6 +1240,7 @@ export async function registerRoutes(
               description: `Dépôt SendavaPay #${deposit.id}`,
             });
             await storage.processDepositReferralCommissions(deposit.userId, deposit.amount);
+            await applyDepositBonus(deposit.userId, deposit.amount, deposit.id);
           }
         }
       }
@@ -1272,6 +1301,7 @@ export async function registerRoutes(
               description: `Dépôt SendavaPay #${deposit.id}`,
             });
             await storage.processDepositReferralCommissions(deposit.userId, deposit.amount);
+            await applyDepositBonus(deposit.userId, deposit.amount, deposit.id);
           }
         } else if (event === "payment.failed" || event === "payment.expired" || status === "failed" || status === "cancelled") {
           await storage.updateDeposit(deposit.id, { status: "rejected", processedAt: new Date() });
@@ -1382,6 +1412,7 @@ export async function registerRoutes(
           await storage.updateUser(deposit.userId, { balance: newBalance.toFixed(2), hasDeposited: true });
           await storage.createTransaction({ userId: deposit.userId, type: "deposit", amount: deposit.amount.toString(), description: `Dépôt AshtechPay #${deposit.id}` });
           await storage.processDepositReferralCommissions(deposit.userId, deposit.amount);
+          await applyDepositBonus(deposit.userId, deposit.amount, deposit.id);
         }
         return res.json({ status: "approved" });
       }
@@ -1492,6 +1523,7 @@ export async function registerRoutes(
           await storage.updateUser(row.user_id, { balance: newBalance.toFixed(2), hasDeposited: true });
           await storage.createTransaction({ userId: row.user_id, type: "deposit", amount: row.amount.toString(), description: `Dépôt AshtechPay #${row.id}` });
           await storage.processDepositReferralCommissions(row.user_id, row.amount);
+          await applyDepositBonus(row.user_id, row.amount, row.id);
         }
       } else if (event === "payment.failed") {
         await storage.updateDeposit(row.id, { status: "rejected", processedAt: new Date() });
@@ -1990,6 +2022,8 @@ export async function registerRoutes(
           amount: deposit.amount.toString(),
           description: "Dépôt validé",
         });
+        await storage.processDepositReferralCommissions(user.id, deposit.amount);
+        await applyDepositBonus(user.id, deposit.amount, deposit.id);
       }
 
       await storage.logAdminAction(req.session.userId!, "approve_deposit", deposit.userId, `Dépôt ${deposit.id} approuvé: ${deposit.amount}F`);

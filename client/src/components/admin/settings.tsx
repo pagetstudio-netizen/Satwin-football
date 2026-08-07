@@ -57,6 +57,9 @@ const settingsSchema = z.object({
   ashtechpayEnabled: z.boolean(),
   ashtechpayChannelName: z.string().min(1, "Nom requis"),
   ashtechpayCountries: z.string(),
+  depositBonusEnabled: z.boolean(),
+  depositBonusPercent: z.string().min(1, "Pourcentage requis"),
+  depositBonusDays: z.string(),
 });
 
 type SettingsForm = z.infer<typeof settingsSchema>;
@@ -141,6 +144,9 @@ export default function AdminSettings({ isSuperAdmin }: AdminSettingsProps) {
         ashtechpayEnabled: settings.ashtechpayEnabled === "true",
         ashtechpayChannelName: settings.ashtechpayChannelName || "AshtechPay",
         ashtechpayCountries: settings.ashtechpayCountries || "",
+        depositBonusEnabled: settings.depositBonusEnabled === "true",
+        depositBonusPercent: settings.depositBonusPercent || "5",
+        depositBonusDays: settings.depositBonusDays || "2,3,5",
       });
     }
   }, [settings, form]);
@@ -155,6 +161,7 @@ export default function AdminSettings({ isSuperAdmin }: AdminSettingsProps) {
         groupEnabled: String(data.groupEnabled),
         sendavapayEnabled: String(data.sendavapayEnabled),
         ashtechpayEnabled: String(data.ashtechpayEnabled),
+        depositBonusEnabled: String(data.depositBonusEnabled),
       };
       const response = await apiRequest("POST", "/api/admin/settings", serialized);
       if (!response.ok) {
@@ -600,6 +607,61 @@ export default function AdminSettings({ isSuperAdmin }: AdminSettingsProps) {
               <p>1. Ajoutez le secret <code className="bg-emerald-100 px-1 rounded">ACHPAY_API_KEY</code> dans les Secrets du serveur</p>
               <p>2. Webhook optionnel (sans vérification de signature) : <code className="bg-emerald-100 px-1 rounded">/api/webhooks/ashtechpay</code></p>
               <p>3. Pays disponibles : BJ, BF, CM, CF, CG, CI, GA, GN, GQ, GW, ML, NE, CD, SN, TD, TG</p>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* ── Bonus dépôt ── */}
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base flex items-center gap-2">
+              <Zap className="w-5 h-5 text-yellow-500" />
+              Bonus dépôt — Jours spéciaux
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex items-center justify-between rounded-xl border p-3">
+              <div>
+                <p className="text-sm font-semibold text-gray-800">Activer le bonus dépôt</p>
+                <p className="text-xs text-gray-500">Les dépôts validés les jours configurés reçoivent un bonus automatique</p>
+              </div>
+              <FormField control={form.control} name="depositBonusEnabled" render={({ field }) => (
+                <FormItem className="flex items-center gap-2 space-y-0">
+                  <FormLabel className="text-xs text-gray-500">{field.value ? "Actif" : "Désactivé"}</FormLabel>
+                  <FormControl>
+                    <Switch checked={field.value} onCheckedChange={field.onChange} />
+                  </FormControl>
+                </FormItem>
+              )} />
+            </div>
+            <FormField control={form.control} name="depositBonusPercent" render={({ field }) => (
+              <FormItem>
+                <FormLabel>Taux de bonus (%)</FormLabel>
+                <FormControl><Input {...field} type="number" min="1" max="100" placeholder="5" /></FormControl>
+                <FormMessage />
+              </FormItem>
+            )} />
+            <FormField control={form.control} name="depositBonusDays" render={({ field }) => (
+              <FormItem>
+                <FormLabel>Jours actifs</FormLabel>
+                <FormControl><Input {...field} placeholder="2,3,5" /></FormControl>
+                <FormDescription className="text-xs">
+                  Numéros des jours séparés par virgule : <code className="bg-gray-100 px-1 rounded">0</code>=Dim,
+                  <code className="bg-gray-100 px-1 rounded">1</code>=Lun,
+                  <code className="bg-gray-100 px-1 rounded">2</code>=Mar,
+                  <code className="bg-gray-100 px-1 rounded">3</code>=Mer,
+                  <code className="bg-gray-100 px-1 rounded">4</code>=Jeu,
+                  <code className="bg-gray-100 px-1 rounded">5</code>=Ven,
+                  <code className="bg-gray-100 px-1 rounded">6</code>=Sam.
+                  Par défaut : <code className="bg-gray-100 px-1 rounded">2,3,5</code> (Mar, Mer, Ven)
+                </FormDescription>
+                <FormMessage />
+              </FormItem>
+            )} />
+            <div className="rounded-xl bg-yellow-50 border border-yellow-100 p-3 text-xs text-yellow-800 space-y-1">
+              <p className="font-semibold">Comment ça fonctionne :</p>
+              <p>Dépôt de 3 000 F un mardi → bonus automatique de 150 F (5%) crédité immédiatement après validation.</p>
+              <p>Le bonus apparaît dans l'historique de l'utilisateur comme une transaction distincte.</p>
             </div>
           </CardContent>
         </Card>
