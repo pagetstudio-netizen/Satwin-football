@@ -2323,7 +2323,7 @@ export async function registerRoutes(
   app.get("/api/admin/plan-b/analyse", requireAdmin, async (req, res) => {
     try {
       const threshold = parseFloat((req.query.threshold as string) || "20000");
-      const rows = await db.execute(sql`
+      const result = await db.execute(sql`
         SELECT u.id, u.full_name, u.phone, u.country, u.balance, u.referral_code,
                u.has_deposited, u.has_active_product,
                (SELECT COUNT(*) FROM users ref WHERE ref.referred_by = u.referral_code)::int AS team_count
@@ -2334,7 +2334,11 @@ export async function registerRoutes(
           AND u.id NOT IN (SELECT user_id FROM plan_b_users)
         ORDER BY CAST(u.balance AS NUMERIC) DESC
       `);
-      const list = ((rows as any)?.rows ?? rows);
+      const list: any[] = Array.isArray((result as any).rows)
+        ? (result as any).rows
+        : Array.isArray(result)
+          ? result as any[]
+          : [];
       res.json({ threshold, candidates: list });
     } catch (e: any) {
       serverError(res, e);
