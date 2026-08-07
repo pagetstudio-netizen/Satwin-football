@@ -147,10 +147,16 @@ export default function AdminPlanB() {
     setSelectedIds(new Set());
     try {
       const res = await fetch(`/api/admin/plan-b/analyse?threshold=${encodeURIComponent(threshold)}`, { credentials: "include" });
-      const data: AnalysisResult = await res.json();
-      setAnalyseResult(data);
-    } catch {
-      toast({ title: "Erreur", description: "Impossible de lancer l'analyse", variant: "destructive" });
+      let data: any;
+      try { data = await res.json(); } catch { data = null; }
+      if (!res.ok || !data || !Array.isArray(data.candidates)) {
+        const msg = data?.message || `Erreur serveur (${res.status})`;
+        toast({ title: "Erreur", description: msg, variant: "destructive" });
+        return;
+      }
+      setAnalyseResult(data as AnalysisResult);
+    } catch (err: any) {
+      toast({ title: "Erreur", description: err?.message || "Impossible de contacter le serveur", variant: "destructive" });
     } finally {
       setAnalyseLoading(false);
     }
