@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { getCountryByCode } from "@/lib/countries";
 import { Home, Volume2, ChevronDown, X } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
 
 /* ─── Types settings/links ──────────────────────────── */
 interface LinkSettings {
@@ -223,6 +224,7 @@ function HeroCarousel() {
 
 /* ─── Ticker bar ────────────────────────────────────── */
 function TickerBar({ text }: { text: string }) {
+  const { toast } = useToast();
   return (
     <div style={{
       display: "flex",
@@ -253,20 +255,24 @@ function TickerBar({ text }: { text: string }) {
       </div>
 
       {/* Language selector */}
-      <div style={{
-        display: "flex",
-        alignItems: "center",
-        gap: 4,
-        flexShrink: 0,
-        border: "1px solid #DDD",
-        borderRadius: 6,
-        padding: "3px 7px",
-        background: "white",
-      }}>
+      <button
+        type="button"
+        onClick={() => toast({ title: "Fonctionnalité en maintenance", description: "Cette fonctionnalité n'est pas disponible pour le moment. Réessayez plus tard.", variant: "destructive" })}
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 4,
+          flexShrink: 0,
+          border: "1px solid #DDD",
+          borderRadius: 6,
+          padding: "3px 7px",
+          background: "white",
+          cursor: "pointer",
+        }}>
         <span style={{ fontSize: 14 }}>🇫🇷</span>
         <span style={{ fontSize: 11, fontWeight: 600, color: "#333" }}>FR</span>
         <ChevronDown size={11} color="#666" />
-      </div>
+      </button>
     </div>
   );
 }
