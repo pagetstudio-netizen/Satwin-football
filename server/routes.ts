@@ -3333,7 +3333,7 @@ export async function registerRoutes(
         profitRate: String(profitRate),
         matchDate:  new Date(matchDate),
         minBet:     parseInt(minBet)  || 1500,
-        maxBet:     parseInt(maxBet)  || 500000,
+        maxBet:     parseInt(maxBet)  || 6000000,
         league:     league || "",
         createdBy:  req.session.userId,
       }).returning();
