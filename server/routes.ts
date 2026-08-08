@@ -5,7 +5,7 @@ import { storage } from "./storage";
 import bcrypt from "bcryptjs";
 import { registerSchema, loginSchema, depositSchema, walletSchema, phoneNumberSchema, matches, bets, planBUsers } from "@shared/schema";
 import { db } from "./db";
-import { eq as eqOp, and as andOp, asc as ascOp, desc as descOp, sql } from "drizzle-orm";
+import { eq as eqOp, and as andOp, asc as ascOp, desc as descOp, sql, inArray } from "drizzle-orm";
 import { z } from "zod";
 import ConnectPgSimple from "connect-pg-simple";
 import { 
@@ -3566,23 +3566,27 @@ export async function registerRoutes(
       const liveMap = new Map(liveFixtures.map(f => [f.externalId, f]));
 
       // Fetch only DB matches whose external_id is currently live.
-      // Sanitize IDs to digits/alphanumeric only before interpolating into IN-clause.
-      const sanitizedIds = [...liveMap.keys()]
+      // Uses Drizzle inArray — fully parameterized, no string interpolation.
+      const externalIds = [...liveMap.keys()]
         .map(id => String(id).replace(/[^a-zA-Z0-9_-]/g, ""))
-        .filter(Boolean)
-        .map(id => `'${id}'`)
-        .join(",");
-      if (!sanitizedIds) return;
+        .filter(Boolean);
+      if (externalIds.length === 0) return;
 
-      const liveRows = (await db.execute(
-        // @ts-ignore
-        `SELECT id, external_id, predicted_score, profit_rate, home_team, away_team, status, is_featured, is_vip_only
-         FROM matches
-         WHERE is_active = true
-           AND external_id IN (${sanitizedIds})
-         LIMIT 200`
-      )) as any;
-      const rows: any[] = liveRows?.rows ?? liveRows ?? [];
+      const rows = await db
+        .select({
+          id:             matches.id,
+          external_id:    matches.externalId,
+          predicted_score: matches.predictedScore,
+          profit_rate:    matches.profitRate,
+          home_team:      matches.homeTeam,
+          away_team:      matches.awayTeam,
+          status:         matches.status,
+          is_featured:    matches.isFeatured,
+          is_vip_only:    (matches as any).isVipOnly,
+        })
+        .from(matches)
+        .where(andOp(eqOp(matches.isActive, true), inArray(matches.externalId, externalIds)))
+        .limit(200);
 
       for (const row of rows) {
         const fixture = liveMap.get(row.external_id);
