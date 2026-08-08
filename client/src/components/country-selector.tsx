@@ -10,9 +10,9 @@ interface CountrySelectorProps {
   currentCode?: string;
 }
 
-const ITEM_H = 54;        // px per row
-const VISIBLE = 5;        // rows visible in the drum
-const DRUM_H = ITEM_H * VISIBLE; // 270px
+const ITEM_H = 52;        // px per row
+const VISIBLE = 3;        // rows visible in the drum
+const DRUM_H = ITEM_H * VISIBLE; // 156px
 
 export function CountrySelector({ open, onClose, onSelect, currentCode }: CountrySelectorProps) {
   const [search, setSearch]     = useState("");
@@ -150,7 +150,7 @@ export function CountrySelector({ open, onClose, onSelect, currentCode }: Countr
           {/* top fade */}
           <div style={{
             position: "absolute", top: 0, left: 0, right: 0,
-            height: ITEM_H * 2,
+            height: ITEM_H * 1,
             background: "linear-gradient(to bottom, rgba(255,255,255,0.95), rgba(255,255,255,0))",
             zIndex: 2, pointerEvents: "none",
           }} />
@@ -158,7 +158,7 @@ export function CountrySelector({ open, onClose, onSelect, currentCode }: Countr
           {/* center highlight band */}
           <div style={{
             position: "absolute",
-            top: ITEM_H * 2, height: ITEM_H,
+            top: ITEM_H * 1, height: ITEM_H,
             left: 0, right: 0,
             background: "#f3f4f6",
             borderTop: "1px solid #e5e7eb",
@@ -169,7 +169,7 @@ export function CountrySelector({ open, onClose, onSelect, currentCode }: Countr
           {/* bottom fade */}
           <div style={{
             position: "absolute", bottom: 0, left: 0, right: 0,
-            height: ITEM_H * 2,
+            height: ITEM_H * 1,
             background: "linear-gradient(to top, rgba(255,255,255,0.95), rgba(255,255,255,0))",
             zIndex: 2, pointerEvents: "none",
           }} />
@@ -189,7 +189,7 @@ export function CountrySelector({ open, onClose, onSelect, currentCode }: Countr
             <style>{`div::-webkit-scrollbar { display: none; }`}</style>
 
             {/* top padding so first item can reach center */}
-            <div style={{ height: ITEM_H * 2 }} />
+            <div style={{ height: ITEM_H * 1 }} />
 
             {filtered.map((country, i) => {
               const dist = Math.abs(i - centerIdx);
@@ -232,7 +232,7 @@ export function CountrySelector({ open, onClose, onSelect, currentCode }: Countr
             )}
 
             {/* bottom padding so last item can reach center */}
-            <div style={{ height: ITEM_H * 2 }} />
+            <div style={{ height: ITEM_H * 1 }} />
           </div>
         </div>
 
