@@ -228,7 +228,7 @@ export default function LoginPage() {
           </button>
           <button
             type="button"
-            onClick={() => navigate("/service")}
+            onClick={() => window.open("https://t.me/ahmed_satwinfoot", "_blank")}
             style={{ background: "none", border: "none", cursor: "pointer",
               fontSize: 13, fontWeight: 700, color: "#333", letterSpacing: 0.5 }}
           >
