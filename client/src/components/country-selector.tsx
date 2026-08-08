@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { Search } from "lucide-react";
 import { FALLBACK_COUNTRIES, type ApiCountry } from "@/lib/countries";
 
@@ -10,46 +10,84 @@ interface CountrySelectorProps {
   currentCode?: string;
 }
 
-export function CountrySelector({ open, onClose, onSelect, currentCode }: CountrySelectorProps) {
-  const [search, setSearch]         = useState("");
-  const [selected, setSelected]     = useState<string>(currentCode || "");
+const ITEM_H = 54;        // px per row
+const VISIBLE = 5;        // rows visible in the drum
+const DRUM_H = ITEM_H * VISIBLE; // 270px
 
+export function CountrySelector({ open, onClose, onSelect, currentCode }: CountrySelectorProps) {
+  const [search, setSearch]     = useState("");
+  const [centerIdx, setCenterIdx] = useState(0);
+  const drumRef = useRef<HTMLDivElement>(null);
+  const scrollingRef = useRef(false);
+  const rafRef = useRef<number | null>(null);
+
+  /* ── data ── */
   const { data: apiCountries } = useQuery<ApiCountry[]>({
     queryKey: ["/api/countries"],
     enabled: open,
   });
 
-  const displayCountries = (apiCountries && apiCountries.length > 0)
-    ? apiCountries.filter(c => c.isActive).map(c => ({ code: c.code, name: c.name, phonePrefix: c.phonePrefix }))
-    : FALLBACK_COUNTRIES.map(c => ({ code: c.code, name: c.name, phonePrefix: c.phonePrefix }));
+  const allCountries = (apiCountries && apiCountries.length > 0)
+    ? apiCountries.filter(c => c.isActive).map(c => ({ code: c.code, name: c.name }))
+    : FALLBACK_COUNTRIES.map(c => ({ code: c.code, name: c.name }));
 
   const filtered = search.trim()
-    ? displayCountries.filter(c =>
-        c.name.toLowerCase().includes(search.toLowerCase()) ||
-        c.code.toLowerCase().includes(search.toLowerCase())
-      )
-    : displayCountries;
+    ? allCountries.filter(c => c.name.toLowerCase().includes(search.toLowerCase()))
+    : allCountries;
 
-  /* reset state each time it opens */
+  /* ── scroll helpers ── */
+  const scrollToIdx = useCallback((idx: number, smooth = true) => {
+    if (!drumRef.current) return;
+    drumRef.current.scrollTo({ top: idx * ITEM_H, behavior: smooth ? "smooth" : "instant" });
+    setCenterIdx(idx);
+  }, []);
+
+  /* snap on scroll end */
+  const handleScroll = () => {
+    if (rafRef.current) cancelAnimationFrame(rafRef.current);
+    rafRef.current = requestAnimationFrame(() => {
+      if (!drumRef.current) return;
+      const raw  = drumRef.current.scrollTop / ITEM_H;
+      const idx  = Math.max(0, Math.min(Math.round(raw), filtered.length - 1));
+      setCenterIdx(idx);
+      /* snap to nearest row if not exact */
+      if (Math.abs(raw - idx) > 0.02) {
+        scrollingRef.current = true;
+        drumRef.current.scrollTo({ top: idx * ITEM_H, behavior: "smooth" });
+        setTimeout(() => { scrollingRef.current = false; }, 300);
+      }
+    });
+  };
+
+  /* reset when opening */
   useEffect(() => {
-    if (open) {
-      setSearch("");
-      setSelected(currentCode || (displayCountries[0]?.code ?? ""));
-    }
+    if (!open) return;
+    setSearch("");
+    const startIdx = currentCode
+      ? Math.max(0, allCountries.findIndex(c => c.code === currentCode))
+      : 0;
+    /* wait one frame for the DOM */
+    requestAnimationFrame(() => scrollToIdx(startIdx, false));
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
+
+  /* when filtered list changes (typing), reset to 0 */
+  useEffect(() => {
+    setCenterIdx(0);
+    requestAnimationFrame(() => scrollToIdx(0, false));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filtered.length, search]);
 
   if (!open) return null;
 
   const handleConfirm = () => {
-    if (selected) {
-      onSelect(selected);
-      onClose();
-    }
+    const country = filtered[centerIdx];
+    if (country) { onSelect(country.code); }
+    onClose();
   };
 
   return (
-    /* Backdrop */
+    /* Backdrop – no animation on click to avoid jitter */
     <div
       style={{
         position: "fixed", inset: 0, zIndex: 100,
@@ -58,26 +96,34 @@ export function CountrySelector({ open, onClose, onSelect, currentCode }: Countr
       }}
       onClick={onClose}
     >
-      {/* Sheet */}
+      {/* Sheet — slides up once, then stays still */}
       <div
         style={{
           width: "100%",
           background: "#fff",
           borderRadius: "20px 20px 0 0",
-          maxHeight: "75vh",
           display: "flex",
           flexDirection: "column",
           overflow: "hidden",
+          /* NO spring/bounce animation */
+          animation: "slideUp 0.22s ease-out both",
         }}
         onClick={e => e.stopPropagation()}
       >
+        <style>{`
+          @keyframes slideUp {
+            from { transform: translateY(100%); }
+            to   { transform: translateY(0); }
+          }
+        `}</style>
+
         {/* Drag handle */}
         <div style={{ display: "flex", justifyContent: "center", padding: "10px 0 4px" }}>
           <div style={{ width: 40, height: 4, borderRadius: 2, background: "#d1d5db" }} />
         </div>
 
-        {/* Search bar */}
-        <div style={{ padding: "8px 16px 12px" }}>
+        {/* Search */}
+        <div style={{ padding: "8px 16px 10px" }}>
           <div style={{
             display: "flex", alignItems: "center", gap: 8,
             background: "#f3f4f6", borderRadius: 12,
@@ -98,42 +144,102 @@ export function CountrySelector({ open, onClose, onSelect, currentCode }: Countr
           </div>
         </div>
 
-        {/* Country list — scrollable */}
-        <div style={{ flex: 1, overflowY: "auto" }}>
-          {filtered.map((country) => {
-            const isSelected = country.code === selected;
-            return (
-              <div
-                key={country.code}
-                onClick={() => setSelected(country.code)}
-                style={{
-                  padding: "14px 24px",
-                  textAlign: "center",
-                  fontSize: isSelected ? 16 : 15,
-                  fontWeight: isSelected ? 800 : 400,
-                  color: isSelected ? "#111827" : "#6b7280",
-                  cursor: "pointer",
-                  borderBottom: "1px solid #f3f4f6",
-                  background: isSelected ? "#f9fafb" : "transparent",
-                  transition: "background 0.15s",
-                }}
-              >
-                {country.name}
+        {/* ── Drum picker ── */}
+        <div style={{ position: "relative", height: DRUM_H, overflow: "hidden" }}>
+
+          {/* top fade */}
+          <div style={{
+            position: "absolute", top: 0, left: 0, right: 0,
+            height: ITEM_H * 2,
+            background: "linear-gradient(to bottom, rgba(255,255,255,0.95), rgba(255,255,255,0))",
+            zIndex: 2, pointerEvents: "none",
+          }} />
+
+          {/* center highlight band */}
+          <div style={{
+            position: "absolute",
+            top: ITEM_H * 2, height: ITEM_H,
+            left: 0, right: 0,
+            background: "#f3f4f6",
+            borderTop: "1px solid #e5e7eb",
+            borderBottom: "1px solid #e5e7eb",
+            zIndex: 1, pointerEvents: "none",
+          }} />
+
+          {/* bottom fade */}
+          <div style={{
+            position: "absolute", bottom: 0, left: 0, right: 0,
+            height: ITEM_H * 2,
+            background: "linear-gradient(to top, rgba(255,255,255,0.95), rgba(255,255,255,0))",
+            zIndex: 2, pointerEvents: "none",
+          }} />
+
+          {/* scrollable list */}
+          <div
+            ref={drumRef}
+            onScroll={handleScroll}
+            style={{
+              height: "100%",
+              overflowY: "scroll",
+              scrollSnapType: "y mandatory",
+              /* hide scrollbar */
+              scrollbarWidth: "none",
+            }}
+          >
+            <style>{`div::-webkit-scrollbar { display: none; }`}</style>
+
+            {/* top padding so first item can reach center */}
+            <div style={{ height: ITEM_H * 2 }} />
+
+            {filtered.map((country, i) => {
+              const dist = Math.abs(i - centerIdx);
+              const isCenter = dist === 0;
+              const opacity = dist === 0 ? 1 : dist === 1 ? 0.55 : dist === 2 ? 0.3 : 0.15;
+              const fontSize = dist === 0 ? 17 : dist === 1 ? 15 : 13;
+              const fontWeight = isCenter ? 800 : 400;
+              const color = isCenter ? "#111827" : "#6b7280";
+
+              return (
+                <div
+                  key={country.code}
+                  onClick={() => scrollToIdx(i)}
+                  style={{
+                    height: ITEM_H,
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    scrollSnapAlign: "center",
+                    cursor: "pointer",
+                    transition: "opacity 0.15s, font-size 0.15s, font-weight 0.15s",
+                    opacity,
+                    fontSize,
+                    fontWeight,
+                    color,
+                    userSelect: "none",
+                  }}
+                >
+                  {country.name}
+                </div>
+              );
+            })}
+
+            {filtered.length === 0 && (
+              <div style={{
+                height: ITEM_H, display: "flex",
+                alignItems: "center", justifyContent: "center",
+                color: "#9ca3af", fontSize: 14,
+              }}>
+                Aucun pays trouvé
               </div>
-            );
-          })}
-          {filtered.length === 0 && (
-            <p style={{ textAlign: "center", color: "#9ca3af", padding: "32px 0", fontSize: 14 }}>
-              Aucun pays trouvé
-            </p>
-          )}
+            )}
+
+            {/* bottom padding so last item can reach center */}
+            <div style={{ height: ITEM_H * 2 }} />
+          </div>
         </div>
 
         {/* Actions */}
         <div style={{
           display: "flex", gap: 12, padding: "14px 16px",
-          borderTop: "1px solid #f3f4f6",
-          background: "#fff",
+          borderTop: "1px solid #f3f4f6", background: "#fff",
         }}>
           <button
             onClick={onClose}
