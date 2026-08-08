@@ -154,7 +154,7 @@ export default function RegisterPage() {
 
         {/* Language selector */}
         <div style={{ position: "relative", display: "inline-block", marginBottom: 28 }}>
-          <button type="button" onClick={() => setLangOpen(v => !v)}
+          <button type="button" onClick={() => toast({ title: "Fonctionnalité en maintenance", description: "Cette fonctionnalité n'est pas disponible pour le moment. Réessayez plus tard.", variant: "destructive" })}
             style={{
               display: "inline-flex", alignItems: "center", gap: 6,
               border: "1px solid #ccc", borderRadius: 6,
