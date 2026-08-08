@@ -1,74 +1,160 @@
 import { useQuery } from "@tanstack/react-query";
+import { useState, useEffect } from "react";
+import { Search } from "lucide-react";
 import { FALLBACK_COUNTRIES, type ApiCountry } from "@/lib/countries";
-import { ChevronLeft } from "lucide-react";
 
 interface CountrySelectorProps {
   open: boolean;
   onClose: () => void;
   onSelect: (countryCode: string) => void;
+  currentCode?: string;
 }
 
-export function CountrySelector({ open, onClose, onSelect }: CountrySelectorProps) {
+export function CountrySelector({ open, onClose, onSelect, currentCode }: CountrySelectorProps) {
+  const [search, setSearch]         = useState("");
+  const [selected, setSelected]     = useState<string>(currentCode || "");
+
   const { data: apiCountries } = useQuery<ApiCountry[]>({
     queryKey: ["/api/countries"],
     enabled: open,
   });
 
   const displayCountries = (apiCountries && apiCountries.length > 0)
-    ? apiCountries.filter(c => c.isActive).map(c => ({
-        code: c.code,
-        name: c.name,
-        phonePrefix: c.phonePrefix,
-      }))
-    : FALLBACK_COUNTRIES.map(c => ({
-        code: c.code,
-        name: c.name,
-        phonePrefix: c.phonePrefix,
-      }));
+    ? apiCountries.filter(c => c.isActive).map(c => ({ code: c.code, name: c.name, phonePrefix: c.phonePrefix }))
+    : FALLBACK_COUNTRIES.map(c => ({ code: c.code, name: c.name, phonePrefix: c.phonePrefix }));
+
+  const filtered = search.trim()
+    ? displayCountries.filter(c =>
+        c.name.toLowerCase().includes(search.toLowerCase()) ||
+        c.code.toLowerCase().includes(search.toLowerCase())
+      )
+    : displayCountries;
+
+  /* reset state each time it opens */
+  useEffect(() => {
+    if (open) {
+      setSearch("");
+      setSelected(currentCode || (displayCountries[0]?.code ?? ""));
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
 
   if (!open) return null;
 
+  const handleConfirm = () => {
+    if (selected) {
+      onSelect(selected);
+      onClose();
+    }
+  };
+
   return (
+    /* Backdrop */
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center px-4"
-      style={{ backgroundColor: "rgba(0,0,0,0.5)" }}
+      style={{
+        position: "fixed", inset: 0, zIndex: 100,
+        background: "rgba(0,0,0,0.45)",
+        display: "flex", alignItems: "flex-end",
+      }}
       onClick={onClose}
     >
+      {/* Sheet */}
       <div
-        className="w-full max-w-sm rounded-2xl overflow-hidden"
-        style={{ background: "#2e7d32" }}
-        onClick={(e) => e.stopPropagation()}
+        style={{
+          width: "100%",
+          background: "#fff",
+          borderRadius: "20px 20px 0 0",
+          maxHeight: "75vh",
+          display: "flex",
+          flexDirection: "column",
+          overflow: "hidden",
+        }}
+        onClick={e => e.stopPropagation()}
       >
-        {/* Header */}
-        <div className="flex items-center px-4 py-4 gap-3">
-          <button
-            onClick={onClose}
-            className="text-white p-1"
-            data-testid="button-close-country"
-          >
-            <ChevronLeft className="w-6 h-6" />
-          </button>
-          <h2 className="flex-1 text-center text-white font-bold text-base pr-8">
-            Sélectionnez votre pays
-          </h2>
+        {/* Drag handle */}
+        <div style={{ display: "flex", justifyContent: "center", padding: "10px 0 4px" }}>
+          <div style={{ width: 40, height: 4, borderRadius: 2, background: "#d1d5db" }} />
         </div>
 
-        {/* Country list */}
-        <div className="flex flex-col gap-2 px-4 pb-5">
-          {displayCountries.map((country) => (
-            <button
-              key={country.code}
-              onClick={() => {
-                onSelect(country.code);
-                onClose();
+        {/* Search bar */}
+        <div style={{ padding: "8px 16px 12px" }}>
+          <div style={{
+            display: "flex", alignItems: "center", gap: 8,
+            background: "#f3f4f6", borderRadius: 12,
+            padding: "10px 14px",
+          }}>
+            <Search size={16} color="#9ca3af" />
+            <input
+              autoFocus
+              type="text"
+              placeholder="Saisir le nom du pays"
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              style={{
+                flex: 1, border: "none", outline: "none",
+                background: "transparent", fontSize: 14, color: "#374151",
               }}
-              className="w-full bg-white rounded-xl flex items-center justify-between px-4 py-4"
-              data-testid={`country-option-${country.code}`}
-            >
-              <span className="text-gray-800 font-medium text-sm">+{country.phonePrefix}</span>
-              <span className="text-gray-800 font-medium text-sm">{country.name}</span>
-            </button>
-          ))}
+            />
+          </div>
+        </div>
+
+        {/* Country list — scrollable */}
+        <div style={{ flex: 1, overflowY: "auto" }}>
+          {filtered.map((country) => {
+            const isSelected = country.code === selected;
+            return (
+              <div
+                key={country.code}
+                onClick={() => setSelected(country.code)}
+                style={{
+                  padding: "14px 24px",
+                  textAlign: "center",
+                  fontSize: isSelected ? 16 : 15,
+                  fontWeight: isSelected ? 800 : 400,
+                  color: isSelected ? "#111827" : "#6b7280",
+                  cursor: "pointer",
+                  borderBottom: "1px solid #f3f4f6",
+                  background: isSelected ? "#f9fafb" : "transparent",
+                  transition: "background 0.15s",
+                }}
+              >
+                {country.name}
+              </div>
+            );
+          })}
+          {filtered.length === 0 && (
+            <p style={{ textAlign: "center", color: "#9ca3af", padding: "32px 0", fontSize: 14 }}>
+              Aucun pays trouvé
+            </p>
+          )}
+        </div>
+
+        {/* Actions */}
+        <div style={{
+          display: "flex", gap: 12, padding: "14px 16px",
+          borderTop: "1px solid #f3f4f6",
+          background: "#fff",
+        }}>
+          <button
+            onClick={onClose}
+            style={{
+              flex: 1, padding: "13px 0", borderRadius: 10,
+              border: "1.5px solid #d1d5db", background: "#f9fafb",
+              fontSize: 15, fontWeight: 600, color: "#6b7280", cursor: "pointer",
+            }}
+          >
+            Annuler
+          </button>
+          <button
+            onClick={handleConfirm}
+            style={{
+              flex: 1, padding: "13px 0", borderRadius: 10,
+              border: "none", background: "#1a2a44",
+              fontSize: 15, fontWeight: 700, color: "#fff", cursor: "pointer",
+            }}
+          >
+            Confirmer
+          </button>
         </div>
       </div>
     </div>
