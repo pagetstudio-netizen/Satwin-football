@@ -768,9 +768,9 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getUserCommissions(userId: number): Promise<number> {
-    const result = await db.select({ total: sql<string>`COALESCE(SUM(${referralCommissions.amount}), 0)` })
-      .from(referralCommissions)
-      .where(eq(referralCommissions.userId, userId));
+    const result = await db.select({ total: sql<string>`COALESCE(SUM(amount::numeric), 0)` })
+      .from(transactions)
+      .where(and(eq(transactions.userId, userId), sql`${transactions.type} IN ('commission','deposit_commission')`));
     return parseFloat(result[0]?.total || "0");
   }
 
@@ -812,9 +812,9 @@ export class DatabaseStorage implements IStorage {
       }
     }
 
-    const commResult = await db.select({ total: sql<string>`COALESCE(SUM(${referralCommissions.amount}), 0)` })
-      .from(referralCommissions)
-      .where(eq(referralCommissions.userId, userId));
+    const commResult = await db.select({ total: sql<string>`COALESCE(SUM(amount::numeric), 0)` })
+      .from(transactions)
+      .where(and(eq(transactions.userId, userId), sql`${transactions.type} IN ('commission','deposit_commission')`));
     const totalCommission = parseFloat(commResult[0]?.total || "0");
 
     return { level1Count, level2Count, level3Count, totalCommission };
@@ -826,12 +826,8 @@ export class DatabaseStorage implements IStorage {
     const level3 = await this.getReferrals(userId, 3);
     const totalCommission = await this.getUserCommissions(userId);
 
-    const getCommissionByLevel = async (level: number) => {
-      const result = await db.select({ total: sql<string>`COALESCE(SUM(${referralCommissions.amount}), 0)` })
-        .from(referralCommissions)
-        .where(and(eq(referralCommissions.userId, userId), eq(referralCommissions.level, level)));
-      return parseFloat(result[0]?.total || "0");
-    };
+    // Level breakdown not available from transactions table — return 0 per level
+    const getCommissionByLevel = async (_level: number) => 0;
 
     const countInvested = async (userList: User[]) => {
       let count = 0;
