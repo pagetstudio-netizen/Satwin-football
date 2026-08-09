@@ -3512,16 +3512,47 @@ export async function registerRoutes(
   /* ── API-Football sync: import upcoming fixtures ─────────────────────────── */
   app.post("/api/admin/matches/sync", requireAdmin, async (req, res) => {
     try {
-      const days = parseInt(req.body?.days) || 7;
-      const fixtures = await fetchUpcomingFixtures(days);
+      const days = Math.min(parseInt(req.body?.days) || 2, 7);
+      const MAX_PER_DAY = 20;
+
+      const allFixtures = await fetchUpcomingFixtures(days);
+
+      // ── Limiter à MAX_PER_DAY par jour, priorité matchs soirée (18h-23h59) ──
+      const byDay = new Map<string, typeof allFixtures>();
+      for (const f of allFixtures) {
+        if (!f.externalId) continue;
+        const day = new Date(f.matchDate).toISOString().slice(0, 10);
+        if (!byDay.has(day)) byDay.set(day, []);
+        byDay.get(day)!.push(f);
+      }
+
+      const selected: typeof allFixtures = [];
+      for (const [day, dayFixtures] of byDay) {
+        // Combien de matchs existent déjà en DB pour ce jour ?
+        const existingRows = await db.execute(
+          sql`SELECT COUNT(*) AS cnt FROM matches WHERE DATE(match_date AT TIME ZONE 'Africa/Abidjan') = ${day}::date`
+        ) as any;
+        const existing = parseInt((existingRows?.rows?.[0] ?? existingRows?.[0])?.cnt ?? "0");
+        const canAdd = Math.max(0, MAX_PER_DAY - existing);
+        if (canAdd === 0) continue;
+
+        // Priorité soirée : 18h-23h59 (UTC = heure Abidjan UTC+0) en premier
+        const sorted = [...dayFixtures].sort((a, b) => {
+          const hA = new Date(a.matchDate).getUTCHours();
+          const hB = new Date(b.matchDate).getUTCHours();
+          const evA = hA >= 18 && hA <= 23 ? 0 : 1;
+          const evB = hB >= 18 && hB <= 23 ? 0 : 1;
+          if (evA !== evB) return evA - evB;
+          return hA - hB;
+        });
+
+        selected.push(...sorted.slice(0, canAdd));
+      }
 
       let imported = 0;
       let skipped  = 0;
 
-      for (const f of fixtures) {
-        if (!f.externalId) { skipped++; continue; }
-
-        // Parameterized duplicate check — no string interpolation
+      for (const f of selected) {
         const dupRows = await db.execute(sql`SELECT id FROM matches WHERE external_id = ${String(f.externalId)} LIMIT 1`);
         const already = (dupRows as any)?.rows?.length > 0 || (Array.isArray(dupRows) && dupRows.length > 0);
         if (already) { skipped++; continue; }
@@ -3542,12 +3573,14 @@ export async function registerRoutes(
       }
 
       await storage.logAdminAction(req.session.userId!, "sync_matches", null,
-        `Sync API-Football: ${imported} importé(s), ${skipped} ignoré(s) sur ${fixtures.length}`);
+        `Sync API-Football (max ${MAX_PER_DAY}/jour soirée): ${imported} importé(s), ${skipped} ignoré(s)`);
 
-      res.json({ message: `${imported} match(s) importé(s), ${skipped} ignoré(s)`, imported, skipped, total: fixtures.length });
+      res.json({
+        message: `${imported} match(s) importé(s), ${skipped} ignoré(s) · max ${MAX_PER_DAY}/jour, priorité soirée 18h-23h`,
+        imported, skipped, total: selected.length,
+      });
     } catch (e: any) {
       console.error("[sync_matches]", e);
-      // Admin endpoint — surface the real error so the panel can show it
       res.status(500).json({ message: `Erreur sync: ${e?.message || e}` });
     }
   });
@@ -3876,6 +3909,23 @@ export async function registerRoutes(
         .filter(Boolean);
       if (externalIds.length === 0) return;
 
+      // ── Sécurité scores : uniquement les matchs avec paris en attente ──
+      // On récupère les external_ids des matchs qui ont au moins 1 pari pending.
+      // Les matchs sans parieur ne consomment pas de quota API inutilement.
+      const bettedRows = await db.execute(
+        sql`SELECT DISTINCT m.external_id
+            FROM matches m
+            INNER JOIN bets b ON b.match_id = m.id AND b.status = 'pending'
+            WHERE m.is_active = true AND m.external_id IS NOT NULL`
+      ) as any;
+      const bettedExtIds = new Set<string>(
+        ((bettedRows?.rows ?? bettedRows) as any[]).map((r: any) => String(r.external_id))
+      );
+      // Filtrer : on ne traite que les matchs EN LIVE qui ont des paris actifs
+      const relevantIds = externalIds.filter(id => bettedExtIds.has(id));
+      // (les matchs live sans pari ne seront ni mis à jour ni réglés)
+      if (relevantIds.length === 0) return;
+
       const rows = await db
         .select({
           id:             matches.id,
@@ -3889,7 +3939,7 @@ export async function registerRoutes(
           is_vip_only:    (matches as any).isVipOnly,
         })
         .from(matches)
-        .where(andOp(eqOp(matches.isActive, true), inArray(matches.externalId, externalIds)))
+        .where(andOp(eqOp(matches.isActive, true), inArray(matches.externalId, relevantIds)))
         .limit(200);
 
       for (const row of rows) {
@@ -4145,12 +4195,40 @@ export async function registerRoutes(
   async function runMidnightSync() {
     try {
       console.log("[midnightSync] Début de la synchronisation automatique…");
-      const fixtures = await fetchUpcomingFixtures(2); // free plan: today + tomorrow
-      let imported = 0, skipped = 0;
+      const MAX_PER_DAY = 20;
+      const allFixtures = await fetchUpcomingFixtures(2); // aujourd'hui + demain
 
-      for (const f of fixtures) {
-        if (!f.externalId) { skipped++; continue; }
-        // Parameterized duplicate check
+      // Grouper par jour, priorité soirée (18h-23h), max 20/jour
+      const byDay = new Map<string, typeof allFixtures>();
+      for (const f of allFixtures) {
+        if (!f.externalId) continue;
+        const day = new Date(f.matchDate).toISOString().slice(0, 10);
+        if (!byDay.has(day)) byDay.set(day, []);
+        byDay.get(day)!.push(f);
+      }
+
+      const selected: typeof allFixtures = [];
+      for (const [day, dayFixtures] of byDay) {
+        const existingRows = await db.execute(
+          sql`SELECT COUNT(*) AS cnt FROM matches WHERE DATE(match_date AT TIME ZONE 'Africa/Abidjan') = ${day}::date`
+        ) as any;
+        const existing = parseInt((existingRows?.rows?.[0] ?? existingRows?.[0])?.cnt ?? "0");
+        const canAdd = Math.max(0, MAX_PER_DAY - existing);
+        if (canAdd === 0) continue;
+
+        const sorted = [...dayFixtures].sort((a, b) => {
+          const hA = new Date(a.matchDate).getUTCHours();
+          const hB = new Date(b.matchDate).getUTCHours();
+          const evA = hA >= 18 && hA <= 23 ? 0 : 1;
+          const evB = hB >= 18 && hB <= 23 ? 0 : 1;
+          if (evA !== evB) return evA - evB;
+          return hA - hB;
+        });
+        selected.push(...sorted.slice(0, canAdd));
+      }
+
+      let imported = 0, skipped = 0;
+      for (const f of selected) {
         const dupRows = await db.execute(sql`SELECT id FROM matches WHERE external_id = ${String(f.externalId)} LIMIT 1`);
         const already = (dupRows as any)?.rows?.length > 0 || (Array.isArray(dupRows) && dupRows.length > 0);
         if (already) { skipped++; continue; }
@@ -4168,7 +4246,7 @@ export async function registerRoutes(
         });
         imported++;
       }
-      console.log(`[midnightSync] Terminé: ${imported} importé(s), ${skipped} ignoré(s)`);
+      console.log(`[midnightSync] Terminé: ${imported} importé(s), ${skipped} ignoré(s) (max ${MAX_PER_DAY}/jour, priorité soirée)`);
     } catch (e) {
       console.error("[midnightSync] Erreur:", e);
     }
