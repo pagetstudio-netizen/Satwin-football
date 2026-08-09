@@ -3668,6 +3668,75 @@ export async function registerRoutes(
     } catch (e) { serverError(res, e); }
   });
 
+  // ── Admin: force-settle tous les paris d'un match (won / refunded / postponed) ──
+  app.post("/api/admin/matches/:id/force-settle", requireAdmin, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const { action } = req.body; // "won" | "refunded" | "postponed"
+      if (!["won", "refunded", "postponed"].includes(action))
+        return res.status(400).json({ message: "action invalide (won|refunded|postponed)" });
+
+      const [match] = await db.select().from(matches).where(eqOp(matches.id, id));
+      if (!match) return res.status(404).json({ message: "Match introuvable" });
+
+      if (action === "postponed") {
+        await db.execute(
+          // @ts-ignore
+          `UPDATE matches SET status='postponed', is_active=false WHERE id=${Number(id)}`
+        );
+        await storage.logAdminAction(req.session.userId!, "postpone_match", null, `Match ${id} reporté`);
+        return res.json({ message: "Match marqué comme reporté. Paris laissés en attente.", settled: 0 });
+      }
+
+      const pendingBets = await db.select().from(bets)
+        .where(andOp(eqOp(bets.matchId, id), eqOp(bets.status, "pending")));
+
+      const profitRate = parseFloat(match.profitRate);
+      let settled = 0;
+
+      for (const bet of pendingBets) {
+        const betAmount = parseFloat(bet.amount);
+        if (action === "won") {
+          const profit = betAmount * profitRate / 100;
+          const total  = betAmount + profit;
+          await db.update(bets).set({ status: "won", profit: profit.toFixed(2), settledAt: new Date() })
+            .where(eqOp(bets.id, bet.id));
+          const u = await storage.getUser(bet.userId);
+          if (u) {
+            await storage.updateUser(bet.userId, {
+              balance:       (parseFloat(u.balance) + total).toFixed(2),
+              todayEarnings: (parseFloat(u.todayEarnings) + profit).toFixed(2),
+              totalEarnings: (parseFloat(u.totalEarnings) + profit).toFixed(2),
+            });
+            await storage.createTransaction({ userId: bet.userId, type: "bet_win", amount: total.toFixed(2),
+              description: `Gain (admin): ${match.homeTeam} vs ${match.awayTeam} +${profit.toFixed(0)}F` });
+          }
+        } else {
+          // refunded
+          await db.update(bets).set({ status: "refunded", profit: "0", settledAt: new Date() })
+            .where(eqOp(bets.id, bet.id));
+          const u = await storage.getUser(bet.userId);
+          if (u) {
+            await storage.updateUser(bet.userId, { balance: (parseFloat(u.balance) + betAmount).toFixed(2) });
+            await storage.createTransaction({ userId: bet.userId, type: "bet_refund", amount: betAmount.toFixed(2),
+              description: `Remboursement (admin): ${match.homeTeam} vs ${match.awayTeam}` });
+          }
+        }
+        settled++;
+      }
+
+      // Marquer le match finished
+      const resultLabel = action === "won" ? "won" : "refunded";
+      await db.execute(
+        // @ts-ignore
+        `UPDATE matches SET status='finished', result='${resultLabel}', is_active=false WHERE id=${Number(id)}`
+      );
+      await storage.logAdminAction(req.session.userId!, "force_settle_match", null,
+        `Match ${id} (${match.homeTeam} vs ${match.awayTeam}) force-réglé: ${action}, ${settled} pari(s)`);
+      res.json({ message: `${settled} pari(s) traité(s) — ${action}`, settled });
+    } catch (e: any) { serverError(res, e); }
+  });
+
   app.post("/api/admin/matches/:id/settle", requireAdmin, async (req, res) => {
     try {
       const id = parseInt(req.params.id);
