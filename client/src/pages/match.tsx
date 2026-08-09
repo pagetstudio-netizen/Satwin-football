@@ -474,31 +474,8 @@ function MatchDetail({
             <div
               key={opt.score}
               className="grid grid-cols-3 gap-2 items-center py-2 px-1"
-              style={opt.isPredicted ? {
-                background: "linear-gradient(90deg,#f0fdf4,#dcfce7)",
-                borderRadius: 10,
-                margin: "2px 0",
-              } : {}}
             >
-              {/* Score + badge prédit */}
-              <div className="flex flex-col gap-0.5">
-                <span
-                  className="text-sm font-medium"
-                  style={{ color: opt.isPredicted ? "#15803d" : "#374151", fontWeight: opt.isPredicted ? 800 : 500 }}
-                >
-                  {opt.score}
-                </span>
-                {opt.isPredicted && (
-                  <span style={{
-                    fontSize: 9, fontWeight: 700,
-                    color: "#fff", background: "#15803d",
-                    borderRadius: 4, padding: "1px 5px",
-                    display: "inline-block", letterSpacing: 0.3,
-                  }}>
-                    ✦ PRÉDIT
-                  </span>
-                )}
-              </div>
+              <span className="text-sm font-medium text-gray-700">{opt.score}</span>
 
               {/* Chance / taux de profit */}
               <span
