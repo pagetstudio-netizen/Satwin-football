@@ -1369,6 +1369,9 @@ export async function registerRoutes(
 
       const result = await ashtechpay.collect({ amount, currency, phone, operator, country_code: country, reference: ref, otp });
 
+      console.log("[ashtechpay/collect] country=%s operator=%s phone=%s type=%s result=%s",
+        country, operator, phone, result.type, JSON.stringify(result));
+
       // For OTP flows (no deposit yet) — return immediately so frontend can show OTP input
       if (result.type === "otp_ussd" || result.type === "otp_sms") {
         return res.json(result);

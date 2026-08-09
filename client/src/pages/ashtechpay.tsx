@@ -178,11 +178,6 @@ export default function AshtechPayPage() {
       });
       return res.json();
     },
-    onMutate: () => {
-      // Show waiting screen immediately — USSD push is sent server-side
-      // before the response arrives. If OTP is required, we'll redirect back.
-      setStep("waiting");
-    },
     onSuccess: (data: any) => {
       if (data.depositId) setDepositId(data.depositId);
       if (data.type === "otp_ussd") {
@@ -197,12 +192,13 @@ export default function AshtechPayPage() {
         setStep("wave");
         setPolling(true);
       } else {
-        // ussd_push — stay on waiting, start polling
+        // ussd_push — aller sur waiting et démarrer le polling
+        setStep("waiting");
         setPolling(true);
       }
     },
     onError: (e: any) => {
-      setStep("phone"); // go back on error
+      // reste sur phone en cas d'erreur
       toast({ title: "Erreur paiement", description: e.message, variant: "destructive" });
     },
   });
