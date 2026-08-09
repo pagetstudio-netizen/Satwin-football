@@ -3,8 +3,37 @@
  * Base URL: https://westpay.cfd
  * Flow: hosted payment page (redirect) — no direct API call for deposit
  * Webhook verification: HMAC-SHA256 via X-RobotPay-Signature header
+ *
+ * Secrets (env vars) :
+ *   WESTPAY_WEBHOOK_SECRET          — secret webhook unique (tous pays)
+ *   WESTPAY_API_KEY_TG              — Togo
+ *   WESTPAY_API_KEY_BJ              — Bénin
+ *   WESTPAY_API_KEY_BF              — Burkina Faso
+ *   WESTPAY_API_KEY_CI              — Côte d'Ivoire
+ *   WESTPAY_API_KEY_SN              — Sénégal
+ *   WESTPAY_API_KEY_ML              — Mali
+ *   WESTPAY_API_KEY_CM              — Cameroun
+ *   WESTPAY_API_KEY_CG              — Congo Brazzaville
+ *   WESTPAY_API_KEY_CD              — Congo RDC
+ *   WESTPAY_API_KEY_GA              — Gabon
+ *   WESTPAY_API_KEY_GN              — Guinée
+ *   WESTPAY_API_KEY_NE              — Niger
+ *   WESTPAY_API_KEY_KE              — Kenya
+ *   WESTPAY_API_KEY_GH              — Ghana
+ *   WESTPAY_API_KEY_NG              — Nigeria
  */
 import crypto from "crypto";
+
+/** Clé API par pays depuis les variables d'environnement */
+export function getApiKey(countryCode: string): string {
+  const key = `WESTPAY_API_KEY_${countryCode.toUpperCase()}`;
+  return process.env[key] || "";
+}
+
+/** Secret webhook depuis la variable d'environnement */
+export function getWebhookSecret(): string {
+  return process.env.WESTPAY_WEBHOOK_SECRET || "";
+}
 
 const WESTPAY_BASE = "https://westpay.cfd";
 

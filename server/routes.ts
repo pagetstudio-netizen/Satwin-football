@@ -119,11 +119,12 @@ const PUBLIC_SETTING_KEYS = new Set([
   "sendavapayEnabled", "sendavapayChannelName",
   "ashtechpayEnabled", "ashtechpayChannelName", "ashtechpayCountries",
   "westpayEnabled", "westpayMerchantSlug", "westpayCountries",
+  // westpayWebhookSecret → env var WESTPAY_WEBHOOK_SECRET (non exposé)
   "depositBonusEnabled", "depositBonusPercent", "depositBonusDays",
 ]);
 const ADMIN_SETTING_KEYS = new Set([
   ...Array.from(PUBLIC_SETTING_KEYS),
-  "sendavapayWebhookSecret", "omnipayCallbackKey", "westpayWebhookSecret",
+  "sendavapayWebhookSecret", "omnipayCallbackKey",
 ]);
 const MASKED_SETTING_VALUE = "********";
 
@@ -1597,8 +1598,7 @@ export async function registerRoutes(
       const event     = req.headers["x-robotpay-event"] as string || "";
 
       // Verify signature if secret is configured
-      const settings = await storage.getSettings();
-      const secret   = settings.westpayWebhookSecret || "";
+      const secret = westpay.getWebhookSecret();
       if (secret && !westpay.verifyWebhookSignature(req.body, signature, secret)) {
         console.warn("[westpay webhook] Signature invalide — ignoré");
         return;

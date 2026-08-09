@@ -60,7 +60,6 @@ const settingsSchema = z.object({
   westpayEnabled: z.boolean(),
   westpayMerchantSlug: z.string(),
   westpayCountries: z.string(),
-  westpayWebhookSecret: z.string(),
   depositBonusEnabled: z.boolean(),
   depositBonusPercent: z.string().min(1, "Pourcentage requis"),
   depositBonusDays: z.string(),
@@ -151,7 +150,6 @@ export default function AdminSettings({ isSuperAdmin }: AdminSettingsProps) {
         westpayEnabled: settings.westpayEnabled === "true",
         westpayMerchantSlug: settings.westpayMerchantSlug || "",
         westpayCountries: settings.westpayCountries || "",
-        westpayWebhookSecret: settings.westpayWebhookSecret || "",
         depositBonusEnabled: settings.depositBonusEnabled === "true",
         depositBonusPercent: settings.depositBonusPercent || "5",
         depositBonusDays: settings.depositBonusDays || "1,3,5",
@@ -664,21 +662,12 @@ export default function AdminSettings({ isSuperAdmin }: AdminSettingsProps) {
                 <FormMessage />
               </FormItem>
             )} />
-            <FormField control={form.control} name="westpayWebhookSecret" render={({ field }) => (
-              <FormItem>
-                <FormLabel>Secret Webhook</FormLabel>
-                <FormControl><Input {...field} type="password" placeholder="votre-secret-webhook" /></FormControl>
-                <FormDescription className="text-xs">
-                  Copié depuis votre dashboard WestPay → onglet "Webhook". Utilisé pour vérifier les notifications.
-                </FormDescription>
-                <FormMessage />
-              </FormItem>
-            )} />
             <div className="rounded-xl bg-blue-50 border border-blue-100 p-3 text-xs text-blue-800 space-y-1">
-              <p className="font-semibold">Configuration requise :</p>
-              <p>1. Slug marchand (dashboard WestPay)</p>
-              <p>2. URL webhook à configurer : <code className="bg-blue-100 px-1 rounded">/api/webhooks/westpay</code></p>
-              <p>3. 🇧🇫 Orange BF : le code OTP est géré automatiquement par la page WestPay (<code>*144*4*6*montant#</code>)</p>
+              <p className="font-semibold">Configuration requise (variables d'environnement serveur) :</p>
+              <p>1. <code className="bg-blue-100 px-1 rounded">WESTPAY_WEBHOOK_SECRET</code> — secret webhook unique</p>
+              <p>2. <code className="bg-blue-100 px-1 rounded">WESTPAY_API_KEY_ML</code>, <code className="bg-blue-100 px-1 rounded">WESTPAY_API_KEY_CI</code>… — clé par pays</p>
+              <p>3. URL webhook : <code className="bg-blue-100 px-1 rounded">/api/webhooks/westpay</code></p>
+              <p>4. 🇧🇫 Orange BF : OTP géré automatiquement par WestPay (<code>*144*4*6*montant#</code>)</p>
             </div>
           </CardContent>
         </Card>
