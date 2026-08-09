@@ -2268,18 +2268,37 @@ export async function registerRoutes(
       const { userId, durationDays } = req.body;
       if (!userId) return res.status(400).json({ message: "userId requis" });
       const uid = parseInt(userId);
+      const days = durationDays ? parseInt(durationDays) : null;
+
       const [existing] = await db.select().from(planBUsers).where(eqOp(planBUsers.userId, uid));
       if (existing) {
-        // Update expiry if already a member
-        const expiresAt = durationDays ? new Date(Date.now() + durationDays * 86400000) : null;
-        await db.update(planBUsers).set({ expiresAt } as any).where(eqOp(planBUsers.userId, uid));
-        return res.json({ ...existing, expiresAt });
+        // Modifier la durée d'un membre existant
+        if (days) {
+          await db.execute(sql`UPDATE plan_b_users SET expires_at = NOW() + (${days} || ' days')::interval WHERE user_id = ${uid}`);
+        } else {
+          await db.execute(sql`UPDATE plan_b_users SET expires_at = NULL WHERE user_id = ${uid}`);
+        }
+        const label = days ? `${days}j` : "illimité";
+        await storage.logAdminAction(req.session.userId!, "plan_b_update_duration", uid,
+          `Durée Plan B mise à jour : ${label}`);
+        return res.json({ success: true, durationDays: days });
       }
-      const expiresAt = durationDays ? new Date(Date.now() + durationDays * 86400000) : null;
-      const [entry] = await db.insert(planBUsers).values({ userId: uid, addedBy: req.session.userId, expiresAt } as any).returning();
+
+      // Nouveau membre
+      if (days) {
+        await db.execute(sql`
+          INSERT INTO plan_b_users (user_id, added_by, expires_at)
+          VALUES (${uid}, ${req.session.userId}, NOW() + (${days} || ' days')::interval)
+        `);
+      } else {
+        await db.execute(sql`
+          INSERT INTO plan_b_users (user_id, added_by, expires_at)
+          VALUES (${uid}, ${req.session.userId}, NULL)
+        `);
+      }
       await storage.logAdminAction(req.session.userId!, "plan_b_add", uid,
-        `Utilisateur ${uid} ajouté au Plan B${durationDays ? ` (${durationDays}j)` : " (illimité)"}`);
-      res.json(entry);
+        `Utilisateur ${uid} ajouté au Plan B${days ? ` (${days}j)` : " (illimité)"}`);
+      res.json({ success: true, durationDays: days });
     } catch (e: any) {
       serverError(res, e);
     }
@@ -2373,12 +2392,16 @@ export async function registerRoutes(
       if (!Array.isArray(userIds) || userIds.length === 0)
         return res.status(400).json({ message: "userIds[] requis" });
 
-      const expiresAt = durationDays ? new Date(Date.now() + durationDays * 86400000) : null;
+      const days = durationDays ? parseInt(String(durationDays)) : null;
       let added = 0;
       for (const uid of userIds) {
         const [existing] = await db.select().from(planBUsers).where(eqOp(planBUsers.userId, uid));
         if (existing) continue;
-        await db.insert(planBUsers).values({ userId: uid, addedBy: req.session.userId, expiresAt } as any);
+        if (days) {
+          await db.execute(sql`INSERT INTO plan_b_users (user_id, added_by, expires_at) VALUES (${uid}, ${req.session.userId}, NOW() + (${days} || ' days')::interval)`);
+        } else {
+          await db.execute(sql`INSERT INTO plan_b_users (user_id, added_by, expires_at) VALUES (${uid}, ${req.session.userId}, NULL)`);
+        }
         added++;
       }
       await storage.logAdminAction(req.session.userId!, "plan_b_bulk_add", null,
