@@ -1594,8 +1594,16 @@ export async function registerRoutes(
       // Répondre 200 immédiatement
       res.status(200).json({ received: true });
 
+      // Log TOUT pour diagnostic
       const signature = req.headers["x-robotpay-signature"] as string || "";
       const event     = req.headers["x-robotpay-event"] as string || "";
+      console.log("[westpay webhook] === WEBHOOK REÇU ===");
+      console.log("[westpay webhook] headers:", JSON.stringify({
+        "x-robotpay-signature": signature,
+        "x-robotpay-event": event,
+        "content-type": req.headers["content-type"],
+      }));
+      console.log("[westpay webhook] body:", JSON.stringify(req.body));
 
       // Verify signature if secret is configured
       const secret = westpay.getWebhookSecret();
@@ -1604,33 +1612,80 @@ export async function registerRoutes(
         return;
       }
 
-      const { txId, amount, payer } = req.body;
-      console.log("[westpay webhook] event=%s txId=%s amount=%s payer=%s", event, txId, amount, payer);
+      // Lire les champs possibles du body (WestPay peut varier)
+      const body = req.body || {};
+      const txId      = body.txId      || body.transaction_id || body.reference || body.ref || body.id || "";
+      const amountRaw = body.amount    || body.montant        || body.sum       || "";
+      const payer     = body.payer     || body.phone          || body.msisdn    || body.sender || "";
+      const depositId = body.depositId ? parseInt(body.depositId) : 0;
+      const status    = body.status    || body.state          || "";
 
-      if (event !== "payment.confirmed") return;
+      console.log("[westpay webhook] parsed => event=%s txId=%s amount=%s payer=%s depositId=%d status=%s",
+        event, txId, amountRaw, payer, depositId, status);
 
-      // Find deposit by westpay_reference (txId) OR by matching pending deposit
+      // Accepter tous les events de succès (payment.confirmed, success, payment_success, paid, etc.)
+      const successEvents = ["payment.confirmed", "payment_confirmed", "success", "payment_success", "paid", "completed"];
+      const successStatuses = ["success", "paid", "completed", "confirmed", "approved"];
+      const isSuccess = successEvents.includes(event.toLowerCase()) ||
+                        successStatuses.includes(status.toLowerCase()) ||
+                        event === "";  // si pas d'event header, on traite quand même
+
+      if (!isSuccess) {
+        console.log("[westpay webhook] Event '%s' / status '%s' non traité — ignoré", event, status);
+        return;
+      }
+
+      // Chercher le dépôt : 1) par depositId (dans le body ou la redirect URL), 2) par txId, 3) par pending
       let row: any = null;
-      if (txId) {
+
+      if (depositId) {
         const rows = await db.execute(
-          sql`SELECT * FROM deposits WHERE westpay_reference = ${txId} LIMIT 1`
+          sql`SELECT * FROM deposits WHERE id = ${depositId} LIMIT 1`
         ) as any;
         row = Array.isArray(rows) ? rows[0] : (rows?.rows?.[0]);
+        if (row) console.log("[westpay webhook] Trouvé par depositId=%d", depositId);
       }
-      // Fallback: find most recent pending WestPay deposit for this payer
-      if (!row && payer) {
+
+      if (!row && txId) {
+        try {
+          const rows = await db.execute(
+            sql`SELECT * FROM deposits WHERE westpay_reference = ${txId} LIMIT 1`
+          ) as any;
+          row = Array.isArray(rows) ? rows[0] : (rows?.rows?.[0]);
+          if (row) console.log("[westpay webhook] Trouvé par txId=%s", txId);
+        } catch (e) {
+          // Colonne westpay_reference peut ne pas exister encore
+          console.warn("[westpay webhook] Recherche txId échouée (colonne manquante ?):", e);
+        }
+      }
+
+      // Fallback : dépôt WestPay pending le plus récent
+      if (!row) {
         const rows = await db.execute(
           sql`SELECT * FROM deposits WHERE payment_method = 'WestPay' AND status = 'pending' ORDER BY created_at DESC LIMIT 1`
         ) as any;
         row = Array.isArray(rows) ? rows[0] : (rows?.rows?.[0]);
+        if (row) console.log("[westpay webhook] Trouvé par fallback pending, id=%d", row.id);
       }
-      if (!row) { console.warn("[westpay webhook] Dépôt introuvable txId=%s", txId); return; }
-      if (row.status === "approved" || row.status === "rejected") return;
 
-      // Store txId and approve
-      if (txId) {
-        await db.execute(sql`UPDATE deposits SET westpay_reference = ${txId} WHERE id = ${row.id}`);
+      if (!row) {
+        console.warn("[westpay webhook] Aucun dépôt trouvé — txId=%s depositId=%d", txId, depositId);
+        return;
       }
+      if (row.status === "approved" || row.status === "rejected") {
+        console.log("[westpay webhook] Dépôt #%d déjà traité (%s)", row.id, row.status);
+        return;
+      }
+
+      // Stocker txId si disponible (ignore si colonne absente)
+      if (txId) {
+        try {
+          await db.execute(sql`UPDATE deposits SET westpay_reference = ${txId} WHERE id = ${row.id}`);
+        } catch (e) {
+          console.warn("[westpay webhook] Impossible de stocker westpay_reference:", e);
+        }
+      }
+
       await storage.updateDeposit(row.id, { status: "approved", processedAt: new Date() });
       const u = await storage.getUser(row.user_id);
       if (u) {
@@ -1641,7 +1696,7 @@ export async function registerRoutes(
         if (isFirstDeposit) await storage.processDepositReferralCommissions(row.user_id, row.amount);
         await applyDepositBonus(row.user_id, row.amount, row.id);
       }
-      console.log("[westpay webhook] Dépôt #%d approuvé (%s XOF)", row.id, row.amount);
+      console.log("[westpay webhook] ✅ Dépôt #%d approuvé (%s XOF)", row.id, row.amount);
     } catch (error: any) {
       console.error("[westpay webhook] error:", error);
     }
