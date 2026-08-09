@@ -847,6 +847,11 @@ export class DatabaseStorage implements IStorage {
       return count;
     };
 
+    const [l1inv, l2inv, l3inv, l1rec, l2rec, l3rec] = await Promise.all([
+      countInvested(level1), countInvested(level2), countInvested(level3),
+      countRecharged(level1), countRecharged(level2), countRecharged(level3),
+    ]);
+
     return {
       level1Count: level1.length,
       level2Count: level2.length,
@@ -855,10 +860,12 @@ export class DatabaseStorage implements IStorage {
       level1Commission: await getCommissionByLevel(1),
       level2Commission: await getCommissionByLevel(2),
       level3Commission: await getCommissionByLevel(3),
-      level1Invested: await countInvested(level1),
-      level2Invested: await countInvested(level2),
-      level3Invested: await countInvested(level3),
-      level1Recharged: await countRecharged(level1),
+      level1Invested: l1inv,
+      level2Invested: l2inv,
+      level3Invested: l3inv,
+      level1Recharged: l1rec,
+      level2Recharged: l2rec,
+      level3Recharged: l3rec,
     };
   }
 

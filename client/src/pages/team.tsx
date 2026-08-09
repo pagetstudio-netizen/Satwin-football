@@ -19,7 +19,7 @@ interface TeamStats {
   totalCommission: number; level1Commission: number;
   level2Commission: number; level3Commission: number;
   level1Invested: number; level2Invested: number; level3Invested: number;
-  level1Recharged: number;
+  level1Recharged: number; level2Recharged: number; level3Recharged: number;
 }
 interface Member { id: number; fullName: string; phone: string; country: string; createdAt: string; hasActiveProduct: boolean; totalInvested: number; }
 interface DetailedTeam { level1: Member[]; level2: Member[]; level3: Member[]; }
@@ -149,9 +149,9 @@ export default function TeamPage() {
     { label: "Niveau 3", value: stats?.level3Count    || 0 },
   ];
   const depotLevels = [
-    { label: "Niveau 1", value: stats?.level1Invested || 0 },
-    { label: "Niveau 2", value: stats?.level2Invested || 0 },
-    { label: "Niveau 3", value: stats?.level3Invested || 0 },
+    { label: "Niveau 1", value: stats?.level1Recharged || 0 },
+    { label: "Niveau 2", value: stats?.level2Recharged || 0 },
+    { label: "Niveau 3", value: stats?.level3Recharged || 0 },
   ];
   const commLevels = [
     { label: "Niveau 1", value: stats?.level1Commission || 0 },
@@ -500,7 +500,7 @@ export default function TeamPage() {
 
   /* Daily data sub-pages */
   if (view === "nouveau_registre") return <DailyDataPage title="Aujourd'hui Nouveau registre" totalLabel="Nouveau registre" total={(stats?.level1Count||0)+(stats?.level2Count||0)+(stats?.level3Count||0)} levels={registreLevels} onBack={() => setView("main")} />;
-  if (view === "nouveau_depot")   return <DailyDataPage title="Aujourd'hui Nouveau dépôt"    totalLabel="Nouveau dépôt"    total={(stats?.level1Invested||0)+(stats?.level2Invested||0)+(stats?.level3Invested||0)} levels={depotLevels}     onBack={() => setView("main")} />;
+  if (view === "nouveau_depot")   return <DailyDataPage title="Aujourd'hui Nouveau dépôt"    totalLabel="Nouveau dépôt"    total={(stats?.level1Recharged||0)+(stats?.level2Recharged||0)+(stats?.level3Recharged||0)} levels={depotLevels}     onBack={() => setView("main")} />;
   if (view === "retrait_total")   return <DailyDataPage title="Aujourd'hui Retrait total"    totalLabel="Retrait total"    total={totalCommission * 0.6 | 0}  levels={commLevels}     onBack={() => setView("main")} />;
   if (view === "pari_total")      return <DailyDataPage title="Aujourd'hui Pari total"       totalLabel="Pari total"       total={(stats?.level1Invested||0)+(stats?.level2Invested||0)+(stats?.level3Invested||0)} levels={depotLevels} onBack={() => setView("main")} />;
   if (view === "gain")            return <DailyDataPage title="Aujourd'hui GAIN"             totalLabel="GAIN total"       total={totalCommission}            levels={commLevels}     onBack={() => setView("main")} />;
