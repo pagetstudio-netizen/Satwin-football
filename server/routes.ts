@@ -1149,6 +1149,9 @@ export async function registerRoutes(
         operatorId,
       });
 
+      console.log("[sendavapay/initiate] country=%s operator=%s phone=%s response=%s",
+        svCountry, operatorId, customerPhone, JSON.stringify(result));
+
       // Update deposit status to processing
       if (depositId) {
         await storage.updateDeposit(depositId, { status: "processing" });
@@ -1165,10 +1168,12 @@ export async function registerRoutes(
   app.post("/api/sendavapay/submit-otp", requireAuth, async (req, res) => {
     try {
       const { otpToken, otp } = req.body;
-      if (!otpToken || !otp) {
-        return res.status(400).json({ message: "otpToken et otp requis" });
+      if (!otp) {
+        return res.status(400).json({ message: "Code OTP requis" });
       }
-      const result = await sendavapaySubmitOtp({ otpToken, otp });
+      const result = await sendavapaySubmitOtp({ otpToken: otpToken || "", otp });
+      console.log("[sendavapay/submit-otp] otpToken=%s otp=%s response=%s",
+        otpToken || "(vide)", otp, JSON.stringify(result));
       res.json(result);
     } catch (error: any) {
       console.error("[sendavapay] submit-otp error:", error);

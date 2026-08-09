@@ -239,9 +239,10 @@ export default function DepositPage() {
         // sur le téléphone — pas besoin de redirection, on attend juste le webhook
         setSvPolling(true);
         setStep("sv-waiting");
-      } else if (data.requiresOtp && data.otpToken) {
+      } else if (data.requiresOtp) {
         // Orange Money (BF, CI, GN, ML, SN) — user must dial USSD then enter OTP
-        setSvOtpToken(data.otpToken);
+        // otpToken peut être absent selon l'opérateur — on navigue quand même
+        setSvOtpToken(data.otpToken || data.token || "");
         const ussd = data.ussdCode || getUssdCode(svOperator?.name || "", svCountry);
         setSvUssdCode(ussd);
         setSvOtpMessage(data.message || "");
