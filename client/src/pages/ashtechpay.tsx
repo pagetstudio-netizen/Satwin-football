@@ -47,6 +47,11 @@ function getUssdCode(operatorName: string, country: string): string {
   return "";
 }
 
+/** Orange Money nécessite OTP avant appel API (USSD push ne fonctionne pas) */
+function isOrangeOperator(name: string): boolean {
+  return name.toLowerCase().includes("orange");
+}
+
 function AmountHeader({ amount, currency }: { amount: number; currency: string }) {
   const integer = Math.floor(amount).toLocaleString("fr-FR");
   const decimals = (amount % 1).toFixed(2).slice(1);
@@ -294,7 +299,19 @@ export default function AshtechPayPage() {
             style={{ flex: 1, padding: "14px 0", borderRadius: 8, background: BTN_BACK, color: "#fff", border: "none", cursor: "pointer", fontWeight: 600, fontSize: 14 }}>
             ‹ Retour
           </button>
-          <button onClick={() => { if (!phone.trim()) { toast({ title: "Numéro requis", variant: "destructive" }); return; } collectMut.mutate(); }}
+          <button onClick={() => {
+              if (!phone.trim()) { toast({ title: "Numéro requis", variant: "destructive" }); return; }
+              if (selectedOp && isOrangeOperator(selectedOp)) {
+                // Orange : afficher OTP d'abord, puis appeler l'API avec l'OTP
+                const ref = `${Date.now()}-${user.id}`;
+                setReference(ref);
+                setUssdCode(getUssdCode(selectedOp, country));
+                setOtp("");
+                setStep("otp_ussd");
+              } else {
+                collectMut.mutate();
+              }
+            }}
             disabled={collectMut.isPending}
             style={{ flex: 1.6, padding: "14px 0", borderRadius: 8, background: BTN_NEXT, color: "#fff", border: "none", cursor: "pointer", fontWeight: 600, fontSize: 14, opacity: collectMut.isPending ? 0.7 : 1 }}>
             {collectMut.isPending
