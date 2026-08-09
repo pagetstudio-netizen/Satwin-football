@@ -27,6 +27,7 @@ interface Match {
 }
 
 interface ScoreOption {
+  isPredicted?: boolean;
   score: string;
   chance: number;
   pool: number;
@@ -66,6 +67,20 @@ function generateScoreOptions(match: Match): ScoreOption[] {
     const pool = Math.floor((30 + rand() * 60) * 1e9);
     return { score, chance, pool };
   });
+}
+
+function buildScoreList(match: Match): ScoreOption[] {
+  const all = generateScoreOptions(match);
+  const profitRate = parseFloat(match.profitRate) || 0;
+  // Separate predicted from others
+  const predicted = all.find(o => o.score === match.predictedScore);
+  const others    = all.filter(o => o.score !== match.predictedScore);
+  if (!predicted) return all;
+  // Predicted score shows the real profit rate
+  return [
+    { ...predicted, chance: profitRate, isPredicted: true },
+    ...others,
+  ];
 }
 
 // Format CFA pool like screenshot
@@ -342,7 +357,7 @@ function MatchDetail({
   const country = getCountryByCode(user?.country || "");
   const currency = country?.currency || "CFA";
   const balance = parseFloat(user?.balance || "0");
-  const scoreOptions = useMemo(() => generateScoreOptions(match), [match.id]);
+  const scoreOptions = useMemo(() => buildScoreList(match), [match.id]);
   const [selectedScore, setSelectedScore] = useState<ScoreOption | null>(null);
   const [successData, setSuccessData] = useState<{ amount: number; gain: number; exchangeId: string } | null>(null);
   const { data: userBets } = useQuery<any[]>({ queryKey: ["/api/bets"] });
@@ -456,9 +471,43 @@ function MatchDetail({
         {/* Score rows */}
         <div className="space-y-0 divide-y divide-gray-50">
           {scoreOptions.map((opt) => (
-            <div key={opt.score} className="grid grid-cols-3 gap-2 items-center py-2 px-1">
-              <span className="text-sm font-medium text-gray-700">{opt.score}</span>
-              <span className="text-sm text-center" style={{ color: "#15803d" }}>{opt.chance.toFixed(2)}%</span>
+            <div
+              key={opt.score}
+              className="grid grid-cols-3 gap-2 items-center py-2 px-1"
+              style={opt.isPredicted ? {
+                background: "linear-gradient(90deg,#f0fdf4,#dcfce7)",
+                borderRadius: 10,
+                margin: "2px 0",
+              } : {}}
+            >
+              {/* Score + badge prédit */}
+              <div className="flex flex-col gap-0.5">
+                <span
+                  className="text-sm font-medium"
+                  style={{ color: opt.isPredicted ? "#15803d" : "#374151", fontWeight: opt.isPredicted ? 800 : 500 }}
+                >
+                  {opt.score}
+                </span>
+                {opt.isPredicted && (
+                  <span style={{
+                    fontSize: 9, fontWeight: 700,
+                    color: "#fff", background: "#15803d",
+                    borderRadius: 4, padding: "1px 5px",
+                    display: "inline-block", letterSpacing: 0.3,
+                  }}>
+                    ✦ PRÉDIT
+                  </span>
+                )}
+              </div>
+
+              {/* Chance / taux de profit */}
+              <span
+                className="text-sm text-center font-semibold"
+                style={{ color: opt.isPredicted ? "#15803d" : "#15803d" }}
+              >
+                +{opt.chance.toFixed(2)}%
+              </span>
+
               <div className="flex flex-col items-end gap-1">
                 <span className="text-xs text-gray-700">{formatPool(opt.pool)}</span>
                 {alreadyBet && (
@@ -468,7 +517,7 @@ function MatchDetail({
                   <button
                     onClick={() => setSelectedScore(opt)}
                     className="px-4 py-1 rounded text-xs font-bold text-white"
-                    style={{ background: "#15803d", minWidth: 52 }}>
+                    style={{ background: opt.isPredicted ? "#15803d" : "#15803d", minWidth: 52 }}>
                     PARI
                   </button>
                 ) : match.status === "live" ? (
