@@ -28,6 +28,7 @@ import {
   toSendavapayCountry,
 } from "./sendavapay";
 import * as ashtechpay from "./ashtechpay";
+import * as westpay from "./westpay";
 import express from "express";
 import {
   fetchUpcomingFixtures,
@@ -117,11 +118,12 @@ const PUBLIC_SETTING_KEYS = new Set([
   "level1Commission", "level2Commission", "level3Commission",
   "sendavapayEnabled", "sendavapayChannelName",
   "ashtechpayEnabled", "ashtechpayChannelName", "ashtechpayCountries",
+  "westpayEnabled", "westpayMerchantSlug", "westpayCountries",
   "depositBonusEnabled", "depositBonusPercent", "depositBonusDays",
 ]);
 const ADMIN_SETTING_KEYS = new Set([
   ...Array.from(PUBLIC_SETTING_KEYS),
-  "sendavapayWebhookSecret", "omnipayCallbackKey",
+  "sendavapayWebhookSecret", "omnipayCallbackKey", "westpayWebhookSecret",
 ]);
 const MASKED_SETTING_VALUE = "********";
 
@@ -644,6 +646,17 @@ export async function registerRoutes(
           isApi: true,
           isActive: true,
           gateway: "ashtechpay",
+        });
+      }
+      const westpayEnabled = settings.westpayEnabled === "true";
+      if (westpayEnabled) {
+        virtualChannels.push({
+          id: -4,
+          name: "WestPay",
+          redirectUrl: "",
+          isApi: true,
+          isActive: true,
+          gateway: "westpay",
         });
       }
 
@@ -1509,6 +1522,128 @@ export async function registerRoutes(
     } catch (error: any) {
       console.error("[ashtechpay] crypto collect error:", error);
       res.status(400).json({ message: error.message || "Erreur AshtechPay Crypto" });
+    }
+  });
+
+  // ── WestPay routes ────────────────────────────────────────────────────────
+
+  // POST create deposit + return hosted pay URL
+  app.post("/api/westpay/create-deposit", requireAuth, async (req, res) => {
+    try {
+      const settings = await storage.getSettings();
+      if (settings.westpayEnabled !== "true")
+        return res.status(403).json({ message: "WestPay désactivé" });
+
+      const merchantSlug = settings.westpayMerchantSlug?.trim();
+      if (!merchantSlug)
+        return res.status(400).json({ message: "Slug marchand WestPay non configuré" });
+
+      const user = await storage.getUser(req.session.userId!);
+      if (!user) return res.status(401).json({ message: "Non authentifié" });
+
+      const { amount, country, baseUrl } = req.body;
+      if (!amount || !country) return res.status(400).json({ message: "amount et country requis" });
+
+      // Create pending deposit record
+      const deposit = await storage.createDeposit({
+        userId: req.session.userId!,
+        amount: Math.round(Number(amount)),
+        accountName: user.fullName || "",
+        accountNumber: user.phone || "",
+        country,
+        paymentMethod: "WestPay",
+        status: "pending",
+      } as any);
+
+      // Build WestPay redirect URL back to our app
+      const origin = (baseUrl || "").replace(/\/$/, "");
+      const redirectUrl = `${origin}/westpay-return?depositId=${deposit.id}`;
+      const payUrl = westpay.buildPayUrl({
+        merchantSlug,
+        amount: Math.round(Number(amount)),
+        countryCode: country,
+        redirectUrl,
+      });
+
+      console.log("[westpay] create-deposit depositId=%d payUrl=%s", deposit.id, payUrl);
+      res.json({ depositId: deposit.id, payUrl });
+    } catch (error: any) {
+      console.error("[westpay] create-deposit error:", error);
+      res.status(400).json({ message: error.message || "Erreur WestPay" });
+    }
+  });
+
+  // GET poll deposit status (westpay-return page polls this)
+  app.get("/api/deposits/:id/westpay-status", requireAuth, async (req, res) => {
+    try {
+      const depositId = parseInt(req.params.id);
+      const deposit = await storage.getDeposit(depositId);
+      if (!deposit || deposit.userId !== req.session.userId!)
+        return res.status(404).json({ message: "Dépôt introuvable" });
+      res.json({ status: deposit.status, amount: deposit.amount });
+    } catch (error: any) {
+      console.error("[westpay] status error:", error);
+      serverError(res, error);
+    }
+  });
+
+  // POST webhook WestPay — HMAC-SHA256 via X-RobotPay-Signature
+  app.post("/api/webhooks/westpay", express.json(), async (req, res) => {
+    try {
+      // Répondre 200 immédiatement
+      res.status(200).json({ received: true });
+
+      const signature = req.headers["x-robotpay-signature"] as string || "";
+      const event     = req.headers["x-robotpay-event"] as string || "";
+
+      // Verify signature if secret is configured
+      const settings = await storage.getSettings();
+      const secret   = settings.westpayWebhookSecret || "";
+      if (secret && !westpay.verifyWebhookSignature(req.body, signature, secret)) {
+        console.warn("[westpay webhook] Signature invalide — ignoré");
+        return;
+      }
+
+      const { txId, amount, payer } = req.body;
+      console.log("[westpay webhook] event=%s txId=%s amount=%s payer=%s", event, txId, amount, payer);
+
+      if (event !== "payment.confirmed") return;
+
+      // Find deposit by westpay_reference (txId) OR by matching pending deposit
+      let row: any = null;
+      if (txId) {
+        const rows = await db.execute(
+          sql`SELECT * FROM deposits WHERE westpay_reference = ${txId} LIMIT 1`
+        ) as any;
+        row = Array.isArray(rows) ? rows[0] : (rows?.rows?.[0]);
+      }
+      // Fallback: find most recent pending WestPay deposit for this payer
+      if (!row && payer) {
+        const rows = await db.execute(
+          sql`SELECT * FROM deposits WHERE payment_method = 'WestPay' AND status = 'pending' ORDER BY created_at DESC LIMIT 1`
+        ) as any;
+        row = Array.isArray(rows) ? rows[0] : (rows?.rows?.[0]);
+      }
+      if (!row) { console.warn("[westpay webhook] Dépôt introuvable txId=%s", txId); return; }
+      if (row.status === "approved" || row.status === "rejected") return;
+
+      // Store txId and approve
+      if (txId) {
+        await db.execute(sql`UPDATE deposits SET westpay_reference = ${txId} WHERE id = ${row.id}`);
+      }
+      await storage.updateDeposit(row.id, { status: "approved", processedAt: new Date() });
+      const u = await storage.getUser(row.user_id);
+      if (u) {
+        const isFirstDeposit = !u.hasDeposited;
+        const newBalance = parseFloat(u.balance) + row.amount;
+        await storage.updateUser(row.user_id, { balance: newBalance.toFixed(2), hasDeposited: true });
+        await storage.createTransaction({ userId: row.user_id, type: "deposit", amount: row.amount.toString(), description: `Dépôt WestPay #${row.id}` });
+        if (isFirstDeposit) await storage.processDepositReferralCommissions(row.user_id, row.amount);
+        await applyDepositBonus(row.user_id, row.amount, row.id);
+      }
+      console.log("[westpay webhook] Dépôt #%d approuvé (%s XOF)", row.id, row.amount);
+    } catch (error: any) {
+      console.error("[westpay webhook] error:", error);
     }
   });
 

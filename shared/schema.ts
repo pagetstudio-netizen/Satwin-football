@@ -122,6 +122,7 @@ export const deposits = pgTable("deposits", {
   sendavapayToken: text("sendavapay_token"),
   ashtechpayTransactionId: text("ashtechpay_transaction_id"),
   ashtechpayReference: text("ashtechpay_reference"),
+  westpayReference: text("westpay_reference"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   processedAt: timestamp("processed_at"),
   processedBy: integer("processed_by"),

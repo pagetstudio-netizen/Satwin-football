@@ -19,6 +19,8 @@ import DepositPage from "@/pages/deposit";
 import DrimpayPage from "@/pages/drimpay";
 import AshtechPayPage from "@/pages/ashtechpay";
 import AshtechPayCryptoPage from "@/pages/ashtechpay-crypto";
+import WestPayPage from "@/pages/westpay";
+import WestPayReturnPage from "@/pages/westpay-return";
 import WithdrawalPage from "@/pages/withdrawal";
 import DepotRetraitPage from "@/pages/depot-retrait";
 import InfosPage from "@/pages/infos";
@@ -165,6 +167,12 @@ function Router() {
       </Route>
       <Route path="/ashtechpay-crypto">
         <ProtectedRoute><AshtechPayCryptoPage /></ProtectedRoute>
+      </Route>
+      <Route path="/westpay">
+        <ProtectedRoute><WestPayPage /></ProtectedRoute>
+      </Route>
+      <Route path="/westpay-return">
+        <ProtectedRoute><WestPayReturnPage /></ProtectedRoute>
       </Route>
       <Route path="/withdrawal">
         <ProtectedRoute><WithdrawalPage /></ProtectedRoute>

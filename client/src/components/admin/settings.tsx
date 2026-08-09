@@ -57,6 +57,10 @@ const settingsSchema = z.object({
   ashtechpayEnabled: z.boolean(),
   ashtechpayChannelName: z.string().min(1, "Nom requis"),
   ashtechpayCountries: z.string(),
+  westpayEnabled: z.boolean(),
+  westpayMerchantSlug: z.string(),
+  westpayCountries: z.string(),
+  westpayWebhookSecret: z.string(),
   depositBonusEnabled: z.boolean(),
   depositBonusPercent: z.string().min(1, "Pourcentage requis"),
   depositBonusDays: z.string(),
@@ -144,6 +148,10 @@ export default function AdminSettings({ isSuperAdmin }: AdminSettingsProps) {
         ashtechpayEnabled: settings.ashtechpayEnabled === "true",
         ashtechpayChannelName: settings.ashtechpayChannelName || "AshtechPay",
         ashtechpayCountries: settings.ashtechpayCountries || "",
+        westpayEnabled: settings.westpayEnabled === "true",
+        westpayMerchantSlug: settings.westpayMerchantSlug || "",
+        westpayCountries: settings.westpayCountries || "",
+        westpayWebhookSecret: settings.westpayWebhookSecret || "",
         depositBonusEnabled: settings.depositBonusEnabled === "true",
         depositBonusPercent: settings.depositBonusPercent || "5",
         depositBonusDays: settings.depositBonusDays || "1,3,5",
@@ -161,6 +169,7 @@ export default function AdminSettings({ isSuperAdmin }: AdminSettingsProps) {
         groupEnabled: String(data.groupEnabled),
         sendavapayEnabled: String(data.sendavapayEnabled),
         ashtechpayEnabled: String(data.ashtechpayEnabled),
+        westpayEnabled: String(data.westpayEnabled),
         depositBonusEnabled: String(data.depositBonusEnabled),
       };
       const response = await apiRequest("POST", "/api/admin/settings", serialized);
@@ -607,6 +616,69 @@ export default function AdminSettings({ isSuperAdmin }: AdminSettingsProps) {
               <p>1. Ajoutez le secret <code className="bg-emerald-100 px-1 rounded">ACHPAY_API_KEY</code> dans les Secrets du serveur</p>
               <p>2. Webhook optionnel (sans vérification de signature) : <code className="bg-emerald-100 px-1 rounded">/api/webhooks/ashtechpay</code></p>
               <p>3. Pays disponibles : BJ, BF, CM, CF, CG, CI, GA, GN, GQ, GW, ML, NE, CD, SN, TD, TG</p>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* ── WestPay ── */}
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base flex items-center gap-2">
+              <Zap className="w-5 h-5 text-blue-500" />
+              WestPay — Page de paiement hébergée
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex items-center justify-between rounded-xl border p-3">
+              <div>
+                <p className="text-sm font-semibold text-gray-800">Activer WestPay</p>
+                <p className="text-xs text-gray-500">Redirige vers la page de paiement WestPay (ML, CI, BF, SN…)</p>
+              </div>
+              <FormField control={form.control} name="westpayEnabled" render={({ field }) => (
+                <FormItem className="flex items-center gap-2 space-y-0">
+                  <FormLabel className="text-xs text-gray-500">{field.value ? "Actif" : "Désactivé"}</FormLabel>
+                  <FormControl>
+                    <Switch checked={field.value} onCheckedChange={field.onChange} />
+                  </FormControl>
+                </FormItem>
+              )} />
+            </div>
+            <FormField control={form.control} name="westpayMerchantSlug" render={({ field }) => (
+              <FormItem>
+                <FormLabel>Slug marchand</FormLabel>
+                <FormControl><Input {...field} placeholder="votre-slug" /></FormControl>
+                <FormDescription className="text-xs">
+                  Votre slug WestPay (visible dans l'URL : westpay.cfd/pay?merchant=<strong>slug</strong>)
+                </FormDescription>
+                <FormMessage />
+              </FormItem>
+            )} />
+            <FormField control={form.control} name="westpayCountries" render={({ field }) => (
+              <FormItem>
+                <FormLabel>Pays routés vers WestPay</FormLabel>
+                <FormControl><Input {...field} placeholder="ML,CI" /></FormControl>
+                <FormDescription className="text-xs">
+                  Codes pays séparés par virgule. Ces pays ont priorité sur AshtechPay.
+                  Disponibles : TG, BJ, BF, CI, SN, ML, CM, CG, CD, GA, GN, NE, KE, GH, NG
+                </FormDescription>
+                <FormMessage />
+              </FormItem>
+            )} />
+            <FormField control={form.control} name="westpayWebhookSecret" render={({ field }) => (
+              <FormItem>
+                <FormLabel>Secret Webhook</FormLabel>
+                <FormControl><Input {...field} type="password" placeholder="votre-secret-webhook" /></FormControl>
+                <FormDescription className="text-xs">
+                  Copié depuis votre dashboard WestPay → onglet "Webhook". Utilisé pour vérifier les notifications.
+                </FormDescription>
+                <FormMessage />
+              </FormItem>
+            )} />
+            <div className="rounded-xl bg-blue-50 border border-blue-100 p-3 text-xs text-blue-800 space-y-1">
+              <p className="font-semibold">Configuration requise :</p>
+              <p>1. Slug marchand (dashboard WestPay)</p>
+              <p>2. URL webhook à configurer : <code className="bg-blue-100 px-1 rounded">/api/webhooks/westpay</code></p>
+              <p>3. 🇧🇫 Orange BF : le code OTP est géré automatiquement par la page WestPay (<code>*144*4*6*montant#</code>)</p>
             </div>
           </CardContent>
         </Card>

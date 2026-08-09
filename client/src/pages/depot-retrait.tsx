@@ -56,10 +56,14 @@ function DepotForm({ currency, minDeposit }: { currency: string; minDeposit: num
 
   // Determine payment provider for the selected country
   const ashtechCountries = (publicSettings?.ashtechpayCountries || "").split(",").map(s => s.trim().toUpperCase()).filter(Boolean);
+  const westpayCountries  = (publicSettings?.westpayCountries || "").split(",").map(s => s.trim().toUpperCase()).filter(Boolean);
   const sendavapayEnabled = publicSettings?.sendavapayEnabled === "true";
   const ashtechpayEnabled = publicSettings?.ashtechpayEnabled === "true";
-  function getProvider(countryCode: string): "ashtechpay" | "sendavapay" | "manual" {
-    if (ashtechpayEnabled && ashtechCountries.includes(countryCode.toUpperCase())) return "ashtechpay";
+  const westpayEnabled    = publicSettings?.westpayEnabled === "true";
+  function getProvider(countryCode: string): "ashtechpay" | "westpay" | "sendavapay" | "manual" {
+    const cc = countryCode.toUpperCase();
+    if (westpayEnabled  && westpayCountries.includes(cc))  return "westpay";
+    if (ashtechpayEnabled && ashtechCountries.includes(cc)) return "ashtechpay";
     if (sendavapayEnabled) return "sendavapay";
     return "manual";
   }
@@ -142,7 +146,9 @@ function DepotForm({ currency, minDeposit }: { currency: string; minDeposit: num
                 if (!amount || Number(amount) < minDeposit)
                   return toast({ title: "Montant invalide", description: `Minimum ${minDeposit.toLocaleString()} ${currency}`, variant: "destructive" });
                 const provider = getProvider(selectedCountry);
-                if (provider === "ashtechpay") {
+                if (provider === "westpay") {
+                  navigate(`/westpay?amount=${Number(amount)}&country=${selectedCountry}`);
+                } else if (provider === "ashtechpay") {
                   navigate(`/ashtechpay?amount=${Number(amount)}&country=${selectedCountry}`);
                 } else {
                   navigate(`/drimpay?amount=${Number(amount)}&country=${selectedCountry}`);
