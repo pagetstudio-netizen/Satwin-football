@@ -1360,7 +1360,7 @@ export async function registerRoutes(
       if (!user) return res.status(401).json({ message: "Non authentifié" });
 
       const currency = ashtechpay.getCurrency(country);
-      const ref = reference || `SATWIN-${Date.now()}-${user.id}`;
+      const ref = reference || `${Date.now()}-${user.id}`;
 
       const result = await ashtechpay.collect({ amount, currency, phone, operator, country_code: country, reference: ref, otp });
 
@@ -1465,7 +1465,7 @@ export async function registerRoutes(
       const user = await storage.getUser(req.session.userId!);
       if (!user) return res.status(401).json({ message: "Non authentifié" });
 
-      const ref = `SATWIN-CRYPTO-${Date.now()}-${user.id}`;
+      const ref = `${Date.now()}-${user.id}`;
 
       // Build customer object with all three fields — provider requires a complete object
       const nameParts = (user.fullName || "").trim().split(/\s+/);
