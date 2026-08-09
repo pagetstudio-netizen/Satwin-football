@@ -32,6 +32,21 @@ function getOperatorIcon(name: string): string | null {
   return null;
 }
 
+/** Code USSD à composer pour recevoir l'OTP, par opérateur / pays */
+function getUssdCode(operatorName: string, country: string): string {
+  const n = operatorName.toLowerCase();
+  const c = country.toUpperCase();
+  if (n.includes("orange")) {
+    if (c === "ML") return "#144*77#";   // Orange Mali
+    if (c === "CI") return "#144*82#";   // Orange Côte d'Ivoire
+    if (c === "BF") return "#144*4#";    // Orange Burkina Faso
+    if (c === "SN") return "#144#";      // Orange Sénégal
+    if (c === "GN") return "#144#";      // Orange Guinée
+    return "#144#";
+  }
+  return "";
+}
+
 function AmountHeader({ amount, currency }: { amount: number; currency: string }) {
   const integer = Math.floor(amount).toLocaleString("fr-FR");
   const decimals = (amount % 1).toFixed(2).slice(1);
@@ -172,7 +187,7 @@ export default function AshtechPayPage() {
       if (data.depositId) setDepositId(data.depositId);
       if (data.type === "otp_ussd") {
         setReference(data.reference);
-        setUssdCode(data.ussdCode || "");
+        setUssdCode(data.ussdCode || getUssdCode(selectedOp || "", country));
         setStep("otp_ussd");
       } else if (data.type === "otp_sms") {
         setReference(data.reference);
@@ -304,7 +319,13 @@ export default function AshtechPayPage() {
         <Stepper active={2} />
         <div style={{ background: ORANGE_BG, borderRadius: 8, padding: "12px 16px", marginBottom: 20, border: `1px solid rgba(224,101,0,0.25)` }}>
           <p style={{ color: ORANGE_TX, fontWeight: 700, marginBottom: 4, margin: 0 }}>Composez ce code USSD sur votre téléphone :</p>
-          <p style={{ color: "#1565C0", fontWeight: 900, fontSize: 24, marginTop: 8, fontFamily: "monospace" }}>{ussdCode}</p>
+          {ussdCode ? (
+            <p style={{ color: "#1565C0", fontWeight: 900, fontSize: 24, marginTop: 8, fontFamily: "monospace" }}>{ussdCode}</p>
+          ) : (
+            <p style={{ color: "#1565C0", fontWeight: 900, fontSize: 20, marginTop: 8, fontFamily: "monospace" }}>
+              {getUssdCode(selectedOp || "", country) || "Code USSD de votre opérateur"}
+            </p>
+          )}
           <p style={{ color: ORANGE_TX, fontSize: 12, marginTop: 6, margin: "6px 0 0" }}>L'OTP s'affichera dans le menu USSD</p>
         </div>
         <p style={{ fontSize: 13, color: "#444", marginBottom: 8 }}>Entrez le code OTP reçu :</p>
