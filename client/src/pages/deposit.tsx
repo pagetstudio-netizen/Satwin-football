@@ -242,7 +242,8 @@ export default function DepositPage() {
       } else if (data.requiresOtp && data.otpToken) {
         // Orange Money (BF, CI, GN, ML, SN) — user must dial USSD then enter OTP
         setSvOtpToken(data.otpToken);
-        setSvUssdCode(data.ussdCode || "");
+        const ussd = data.ussdCode || getUssdCode(svOperator?.name || "", svCountry);
+        setSvUssdCode(ussd);
         setSvOtpMessage(data.message || "");
         setStep("sv-otp");
       } else if (data.success) {
@@ -324,6 +325,21 @@ export default function DepositPage() {
     if (n.includes("airtel")) return "/operators/airtel.png";
     if (n.includes("wave")) return "/operators/wave.png";
     return null;
+  };
+
+  /** Code USSD à composer pour recevoir l'OTP, par opérateur / pays */
+  const getUssdCode = (operatorName: string, country: string): string => {
+    const n = operatorName.toLowerCase();
+    const c = country.toUpperCase();
+    if (n.includes("orange")) {
+      if (c === "ML") return "#144*77#";   // Orange Mali
+      if (c === "CI") return "#144*82#";   // Orange Côte d'Ivoire
+      if (c === "BF") return "#144*4#";    // Orange Burkina Faso
+      if (c === "SN") return "#144#";      // Orange Sénégal
+      if (c === "GN") return "#144#";      // Orange Guinée
+      return "#144#";                      // Orange générique
+    }
+    return "";
   };
 
   const handleSubmit = () => {
@@ -742,16 +758,19 @@ export default function DepositPage() {
             </div>
             <p className="font-bold text-gray-900 text-sm">Composez ce code sur votre téléphone</p>
           </div>
-          {svUssdCode ? (
-            <div className="bg-white rounded-xl border border-orange-200 px-4 py-3 text-center">
-              <p className="font-mono font-black text-2xl text-orange-600 tracking-widest">{svUssdCode}</p>
-              <p className="text-xs text-gray-400 mt-1">Composez ce code USSD sur votre téléphone</p>
-            </div>
-          ) : (
-            <p className="text-sm text-gray-600">
-              Composez le code USSD de votre opérateur (ex&nbsp;: <span className="font-mono font-bold text-orange-600">*144#</span>) sur votre téléphone pour recevoir le code OTP par SMS.
-            </p>
-          )}
+          {(() => {
+            const displayCode = svUssdCode || getUssdCode(svOperator?.name || "", svCountry);
+            return displayCode ? (
+              <div className="bg-white rounded-xl border border-orange-200 px-4 py-3 text-center">
+                <p className="font-mono font-black text-2xl text-orange-600 tracking-widest">{displayCode}</p>
+                <p className="text-xs text-gray-400 mt-1">Composez ce code USSD sur votre téléphone</p>
+              </div>
+            ) : (
+              <p className="text-sm text-gray-600">
+                Composez le code USSD de votre opérateur sur votre téléphone pour recevoir le code OTP par SMS.
+              </p>
+            );
+          })()}
         </div>
 
         {/* Step 2 — Enter OTP */}
