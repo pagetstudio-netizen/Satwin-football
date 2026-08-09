@@ -437,10 +437,11 @@ export type InsertBet = typeof bets.$inferInsert;
 
 // ── SATWIN FOOT: Plan B (VIP exclusive) ─────────────────────────────────────
 export const planBUsers = pgTable("plan_b_users", {
-  id:       serial("id").primaryKey(),
-  userId:   integer("user_id").notNull().references(() => users.id),
-  addedAt:  timestamp("added_at").notNull().defaultNow(),
-  addedBy:  integer("added_by"),
+  id:        serial("id").primaryKey(),
+  userId:    integer("user_id").notNull().references(() => users.id),
+  addedAt:   timestamp("added_at").notNull().defaultNow(),
+  addedBy:   integer("added_by"),
+  expiresAt: timestamp("expires_at"),          // NULL = illimité
 });
 export type PlanBUser    = typeof planBUsers.$inferSelect;
 export type InsertPlanBUser = typeof planBUsers.$inferInsert;

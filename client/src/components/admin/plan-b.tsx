@@ -36,6 +36,8 @@ interface PlanBMember {
   id: number;
   user_id: number;
   added_at: string;
+  expires_at: string | null;
+  is_expired: boolean;
   full_name: string;
   phone: string;
   country: string;
@@ -97,6 +99,10 @@ export default function AdminPlanB() {
 
   /* ── Vider la liste ── */
   const [showClearAll, setShowClearAll] = useState(false);
+
+  /* ── Dialog durée ── */
+  const [durationTarget, setDurationTarget] = useState<{ userId: number; name: string } | null>(null);
+  const [selectedDuration, setSelectedDuration] = useState<number | null>(7); // jours, null = illimité
 
   /* ── Analyse Plan B ── */
   const [showAnalyse,    setShowAnalyse]    = useState(false);
@@ -162,15 +168,18 @@ export default function AdminPlanB() {
     }
   };
 
+  const [bulkDuration, setBulkDuration] = useState<number | null>(7);
+
   const bulkAddMut = useMutation({
     mutationFn: async (userIds: number[]) => {
-      const res = await apiRequest("POST", "/api/admin/plan-b/bulk-add", { userIds });
+      const res = await apiRequest("POST", "/api/admin/plan-b/bulk-add", { userIds, durationDays: bulkDuration });
       if (!res.ok) { const d = await res.json(); throw new Error(d.message || "Erreur"); }
       return res.json();
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/plan-b/users"] });
-      toast({ title: `✅ ${data.added} compte(s) autorisé(s) au Plan B !` });
+      const label = bulkDuration ? `${bulkDuration} jour(s)` : "illimité";
+      toast({ title: `✅ ${data.added} compte(s) autorisé(s) au Plan B ! (${label})` });
       // Retirer les IDs ajoutés de la liste candidates
       if (analyseResult) {
         const addedSet = new Set(Array.from(selectedIds));
@@ -203,13 +212,21 @@ export default function AdminPlanB() {
 
   /* ── Mutations ── */
   const addMut = useMutation({
-    mutationFn: (userId: number) => apiRequest("POST", "/api/admin/plan-b/users", { userId }),
+    mutationFn: ({ userId, durationDays }: { userId: number; durationDays: number | null }) =>
+      apiRequest("POST", "/api/admin/plan-b/users", { userId, durationDays }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/plan-b/users"] });
-      toast({ title: "Utilisateur ajouté au Plan B ✓" });
+      setDurationTarget(null);
+      const label = selectedDuration ? `${selectedDuration} jour(s)` : "illimité";
+      toast({ title: `Utilisateur ajouté au Plan B ✓ (${label})` });
     },
     onError: (e: any) => toast({ title: "Erreur", description: e.message, variant: "destructive" }),
   });
+
+  const confirmAdd = () => {
+    if (!durationTarget) return;
+    addMut.mutate({ userId: durationTarget.userId, durationDays: selectedDuration });
+  };
 
   const removeMut = useMutation({
     mutationFn: (userId: number) => apiRequest("DELETE", `/api/admin/plan-b/users/${userId}`),
@@ -449,6 +466,37 @@ export default function AdminPlanB() {
             )
           ) : null}
 
+          {/* Sélecteur de durée pour l'ajout en masse */}
+          {analyseResult && analyseResult.candidates.length > 0 && (
+            <div style={{ background: "#F0F9FF", border: "1px solid #BAE6FD", borderRadius: 10, padding: "10px 12px" }}>
+              <p style={{ fontSize: 12, fontWeight: 700, color: "#0369A1", marginBottom: 8 }}>⏱ Durée pour les comptes sélectionnés :</p>
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                {[
+                  { label: "1j",   value: 1 },
+                  { label: "3j",   value: 3 },
+                  { label: "7j",   value: 7 },
+                  { label: "15j",  value: 15 },
+                  { label: "30j",  value: 30 },
+                  { label: "∞",    value: null },
+                ].map(opt => (
+                  <button
+                    key={opt.label}
+                    onClick={() => setBulkDuration(opt.value)}
+                    style={{
+                      padding: "4px 10px", borderRadius: 8, fontSize: 12, cursor: "pointer",
+                      border: `2px solid ${bulkDuration === opt.value ? "#0369A1" : "#E0F2FE"}`,
+                      background: bulkDuration === opt.value ? "#0369A1" : "#fff",
+                      color: bulkDuration === opt.value ? "#fff" : "#374151",
+                      fontWeight: bulkDuration === opt.value ? 700 : 400,
+                    }}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
           <DialogFooter className="gap-2 mt-2">
             <Button variant="outline" onClick={() => setShowAnalyse(false)}>Fermer</Button>
             <Button
@@ -461,7 +509,7 @@ export default function AdminPlanB() {
               ) : (
                 <Zap className="w-4 h-4 mr-2" />
               )}
-              Autoriser Plan B ({selectedIds.size} sélectionné{selectedIds.size > 1 ? "s" : ""})
+              Autoriser Plan B ({selectedIds.size} · {bulkDuration ? `${bulkDuration}j` : "∞"})
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -543,8 +591,7 @@ export default function AdminPlanB() {
                       <Button
                         size="sm"
                         style={{ background: "#D97706", color: "white", border: "none" }}
-                        onClick={() => addMut.mutate(u.id)}
-                        disabled={addMut.isPending}
+                        onClick={() => { setSelectedDuration(7); setDurationTarget({ userId: u.id, name: u.fullName }); }}
                       >
                         <UserPlus className="w-3 h-3 mr-1" /> Ajouter
                       </Button>
@@ -574,38 +621,124 @@ export default function AdminPlanB() {
             </p>
           ) : (
             <div className="space-y-2">
-              {members.map(m => (
-                <div key={m.id} style={{
-                  display: "flex", alignItems: "center", justifyContent: "space-between",
-                  padding: "10px 12px", borderRadius: 8,
-                  background: "#FFFBEB", border: "1px solid #FDE68A",
-                }}>
-                  <div>
-                    <p style={{ fontWeight: 700, fontSize: 14, margin: 0 }}>
-                      <Crown size={12} color="#D97706" style={{ display: "inline", marginRight: 5 }} />
-                      {m.full_name}
-                    </p>
-                    <p style={{ fontSize: 12, color: "#888", margin: 0 }}>
-                      📱 {m.phone} · 🌍 {m.country} · 💰 {parseFloat(m.balance).toLocaleString("fr-FR")} F
-                    </p>
-                    <p style={{ fontSize: 11, color: "#aaa", margin: 0 }}>
-                      Ajouté le {fmtDate(m.added_at)}
-                    </p>
+              {members.map(m => {
+                const expired = m.is_expired;
+                return (
+                  <div key={m.id} style={{
+                    display: "flex", alignItems: "center", justifyContent: "space-between",
+                    padding: "10px 12px", borderRadius: 8,
+                    background: expired ? "#F9FAFB" : "#FFFBEB",
+                    border: `1px solid ${expired ? "#E5E7EB" : "#FDE68A"}`,
+                    opacity: expired ? 0.7 : 1,
+                  }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <p style={{ fontWeight: 700, fontSize: 14, margin: 0, display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                        <Crown size={12} color={expired ? "#9CA3AF" : "#D97706"} style={{ display: "inline", flexShrink: 0 }} />
+                        {m.full_name}
+                        {expired && (
+                          <span style={{ fontSize: 10, background: "#FEE2E2", color: "#B91C1C", borderRadius: 4, padding: "1px 6px", fontWeight: 700 }}>
+                            EXPIRÉ
+                          </span>
+                        )}
+                      </p>
+                      <p style={{ fontSize: 12, color: "#888", margin: 0 }}>
+                        📱 {m.phone} · 🌍 {m.country} · 💰 {parseFloat(m.balance).toLocaleString("fr-FR")} F
+                      </p>
+                      <p style={{ fontSize: 11, color: expired ? "#EF4444" : "#aaa", margin: 0 }}>
+                        Ajouté le {fmtDate(m.added_at)}
+                        {m.expires_at
+                          ? expired
+                            ? ` · Expiré le ${fmtDate(m.expires_at)}`
+                            : ` · Expire le ${fmtDate(m.expires_at)}`
+                          : " · Illimité"}
+                      </p>
+                    </div>
+                    <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+                      <Button
+                        size="sm" variant="outline"
+                        style={{ fontSize: 11, padding: "2px 8px", color: "#D97706", borderColor: "#FCD34D" }}
+                        onClick={() => { setSelectedDuration(7); setDurationTarget({ userId: m.user_id, name: m.full_name }); }}
+                        title="Modifier la durée"
+                      >
+                        ⏱ Durée
+                      </Button>
+                      <Button
+                        size="sm" variant="outline"
+                        className="text-destructive border-destructive/30"
+                        onClick={() => removeMut.mutate(m.user_id)}
+                        disabled={removeMut.isPending}
+                      >
+                        <UserMinus className="w-3 h-3 mr-1" /> Retirer
+                      </Button>
+                    </div>
                   </div>
-                  <Button
-                    size="sm" variant="outline"
-                    className="text-destructive border-destructive/30"
-                    onClick={() => removeMut.mutate(m.user_id)}
-                    disabled={removeMut.isPending}
-                  >
-                    <UserMinus className="w-3 h-3 mr-1" /> Retirer
-                  </Button>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </CardContent>
       </Card>
+
+      {/* ══════════════════════════════════════════════════════════════════════
+          DIALOG — Choisir la durée Plan B
+      ══════════════════════════════════════════════════════════════════════ */}
+      <Dialog open={!!durationTarget} onOpenChange={open => { if (!open) setDurationTarget(null); }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Crown size={16} color="#D97706" />
+              Durée Plan B
+            </DialogTitle>
+            <DialogDescription>
+              {durationTarget?.name} — choisissez combien de temps cet utilisateur reste dans le Plan B.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="grid grid-cols-3 gap-2 my-2">
+            {[
+              { label: "1 jour",   value: 1 },
+              { label: "3 jours",  value: 3 },
+              { label: "7 jours",  value: 7 },
+              { label: "15 jours", value: 15 },
+              { label: "30 jours", value: 30 },
+              { label: "Illimité", value: null },
+            ].map(opt => (
+              <button
+                key={opt.label}
+                onClick={() => setSelectedDuration(opt.value)}
+                style={{
+                  padding: "10px 6px",
+                  borderRadius: 10,
+                  border: `2px solid ${selectedDuration === opt.value ? "#D97706" : "#E5E7EB"}`,
+                  background: selectedDuration === opt.value ? "#FFF8E8" : "#fff",
+                  fontWeight: selectedDuration === opt.value ? 700 : 400,
+                  fontSize: 13,
+                  color: selectedDuration === opt.value ? "#92400E" : "#374151",
+                  cursor: "pointer",
+                  transition: "all 0.15s",
+                }}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+
+          <DialogFooter className="gap-2 mt-1">
+            <Button variant="outline" onClick={() => setDurationTarget(null)}>Annuler</Button>
+            <Button
+              style={{ background: "#D97706", color: "white" }}
+              disabled={addMut.isPending}
+              onClick={confirmAdd}
+            >
+              {addMut.isPending
+                ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
+                : <Crown size={14} className="mr-2" />
+              }
+              Confirmer
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* ══════════════════════════════════════════════════════════════════════
           SECTION 3 — Matchs VIP (assignation)

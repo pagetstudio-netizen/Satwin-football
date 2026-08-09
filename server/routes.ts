@@ -2249,8 +2249,9 @@ export async function registerRoutes(
     try {
       const rows = await db.execute(
         // @ts-ignore
-        `SELECT pb.id, pb.user_id, pb.added_at, pb.added_by,
-                u.full_name, u.phone, u.country, u.balance, u.referral_code
+        `SELECT pb.id, pb.user_id, pb.added_at, pb.added_by, pb.expires_at,
+                u.full_name, u.phone, u.country, u.balance, u.referral_code,
+                (pb.expires_at IS NOT NULL AND pb.expires_at < NOW()) AS is_expired
          FROM plan_b_users pb
          JOIN users u ON u.id = pb.user_id
          ORDER BY pb.added_at DESC`
@@ -2261,16 +2262,23 @@ export async function registerRoutes(
     }
   });
 
-  /** Add user to Plan B by userId */
+  /** Add user to Plan B by userId (with optional duration) */
   app.post("/api/admin/plan-b/users", requireAdmin, async (req, res) => {
     try {
-      const { userId } = req.body;
+      const { userId, durationDays } = req.body;
       if (!userId) return res.status(400).json({ message: "userId requis" });
       const uid = parseInt(userId);
       const [existing] = await db.select().from(planBUsers).where(eqOp(planBUsers.userId, uid));
-      if (existing) return res.status(409).json({ message: "Utilisateur déjà dans le Plan B" });
-      const [entry] = await db.insert(planBUsers).values({ userId: uid, addedBy: req.session.userId }).returning();
-      await storage.logAdminAction(req.session.userId!, "plan_b_add", uid, `Utilisateur ${uid} ajouté au Plan B`);
+      if (existing) {
+        // Update expiry if already a member
+        const expiresAt = durationDays ? new Date(Date.now() + durationDays * 86400000) : null;
+        await db.update(planBUsers).set({ expiresAt } as any).where(eqOp(planBUsers.userId, uid));
+        return res.json({ ...existing, expiresAt });
+      }
+      const expiresAt = durationDays ? new Date(Date.now() + durationDays * 86400000) : null;
+      const [entry] = await db.insert(planBUsers).values({ userId: uid, addedBy: req.session.userId, expiresAt } as any).returning();
+      await storage.logAdminAction(req.session.userId!, "plan_b_add", uid,
+        `Utilisateur ${uid} ajouté au Plan B${durationDays ? ` (${durationDays}j)` : " (illimité)"}`);
       res.json(entry);
     } catch (e: any) {
       serverError(res, e);
@@ -2358,22 +2366,23 @@ export async function registerRoutes(
     }
   });
 
-  /** Add multiple users to Plan B in bulk */
+  /** Add multiple users to Plan B in bulk (with optional duration) */
   app.post("/api/admin/plan-b/bulk-add", requireAdmin, async (req, res) => {
     try {
-      const { userIds } = req.body as { userIds: number[] };
+      const { userIds, durationDays } = req.body as { userIds: number[]; durationDays?: number };
       if (!Array.isArray(userIds) || userIds.length === 0)
         return res.status(400).json({ message: "userIds[] requis" });
 
+      const expiresAt = durationDays ? new Date(Date.now() + durationDays * 86400000) : null;
       let added = 0;
       for (const uid of userIds) {
         const [existing] = await db.select().from(planBUsers).where(eqOp(planBUsers.userId, uid));
         if (existing) continue;
-        await db.insert(planBUsers).values({ userId: uid, addedBy: req.session.userId });
+        await db.insert(planBUsers).values({ userId: uid, addedBy: req.session.userId, expiresAt } as any);
         added++;
       }
       await storage.logAdminAction(req.session.userId!, "plan_b_bulk_add", null,
-        `Ajout en masse : ${added} utilisateur(s) ajouté(s) au Plan B`);
+        `Ajout en masse : ${added} utilisateur(s) ajouté(s) au Plan B${durationDays ? ` (${durationDays}j)` : " (illimité)"}`);
       res.json({ success: true, added });
     } catch (e: any) {
       serverError(res, e);
@@ -3086,8 +3095,8 @@ export async function registerRoutes(
       const userId = req.session?.userId;
       let isPlanB = false;
       if (userId) {
-        const [planBEntry] = await db.select().from(planBUsers).where(eqOp(planBUsers.userId, userId));
-        isPlanB = !!planBEntry;
+          const [planBEntry] = await db.select().from(planBUsers).where(eqOp(planBUsers.userId, userId));
+        isPlanB = !!planBEntry && (!planBEntry.expiresAt || new Date(planBEntry.expiresAt) > new Date());
       }
 
       const filtered = rows.filter((m: any) => !m.isVipOnly || isPlanB);
@@ -3117,7 +3126,8 @@ export async function registerRoutes(
     try {
       const userId = req.session.userId!;
       const [entry] = await db.select().from(planBUsers).where(eqOp(planBUsers.userId, userId));
-      res.json({ isPlanB: !!entry });
+      const isPlanB = !!entry && (!entry.expiresAt || new Date(entry.expiresAt) > new Date());
+      res.json({ isPlanB, expiresAt: entry?.expiresAt ?? null });
     } catch (e: any) {
       serverError(res, e);
     }
@@ -3143,10 +3153,11 @@ export async function registerRoutes(
       if (betAmount < match.minBet) return res.status(400).json({ message: `Mise minimale: ${match.minBet} F` });
       if (betAmount > match.maxBet) return res.status(400).json({ message: `Mise maximale: ${match.maxBet} F` });
 
-      // Plan B check: VIP-only matches require user to be in plan_b_users
+      // Plan B check: VIP-only matches require user to be an active (non-expired) Plan B member
       if ((match as any).isVipOnly) {
         const [planBEntry] = await db.select().from(planBUsers).where(eqOp(planBUsers.userId, userId));
-        if (!planBEntry) return res.status(403).json({ message: "Ce match est réservé aux membres du Plan B." });
+        const active = !!planBEntry && (!planBEntry.expiresAt || new Date(planBEntry.expiresAt) > new Date());
+        if (!active) return res.status(403).json({ message: "Ce match est réservé aux membres du Plan B." });
       }
 
       const user = await storage.getUser(userId);
@@ -3475,8 +3486,11 @@ export async function registerRoutes(
       const pendingBets = await db.select().from(bets)
         .where(andOp(eqOp(bets.matchId, id), eqOp(bets.status, "pending")));
 
-      // Charger la liste Plan B une seule fois
-      const planBRows = await db.execute(sql`SELECT user_id FROM plan_b_users`);
+      // Charger la liste Plan B active (non expirée) une seule fois
+      const planBRows = await db.execute(sql`
+        SELECT user_id FROM plan_b_users
+        WHERE expires_at IS NULL OR expires_at > NOW()
+      `);
       const planBSet = new Set(((planBRows as any)?.rows ?? planBRows).map((r: any) => Number(r.user_id)));
 
       let settled = 0;
