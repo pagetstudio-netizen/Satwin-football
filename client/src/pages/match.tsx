@@ -214,7 +214,7 @@ function BetModal({
 
   const betMutation = useMutation({
     mutationFn: async () => {
-      const res = await apiRequest("POST", "/api/bets", { matchId: match.id, amount: amountNum });
+      const res = await apiRequest("POST", "/api/bets", { matchId: match.id, amount: amountNum, chosenScore: scoreOption.score });
       if (!res.ok) { const d = await res.json(); throw new Error(d.message); }
       return res.json();
     },

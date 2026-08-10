@@ -3360,7 +3360,7 @@ export async function registerRoutes(
 
   app.post("/api/bets", requireAuth, async (req, res) => {
     try {
-      const { matchId, amount } = req.body;
+      const { matchId, amount, chosenScore } = req.body;
       const userId = req.session.userId!;
       if (!matchId || !amount) return res.status(400).json({ message: "matchId et amount requis" });
       const betAmount = parseFloat(amount);
@@ -3396,6 +3396,7 @@ export async function registerRoutes(
         matchId: match.id,
         amount: betAmount.toFixed(2),
         status: "pending",
+        chosenScore: chosenScore || match.predictedScore,
       }).returning();
 
       // Transaction record

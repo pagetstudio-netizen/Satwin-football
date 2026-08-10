@@ -421,14 +421,15 @@ export const matches = pgTable("matches", {
 
 // ── SATWIN FOOT: Bets ────────────────────────────────────────────────────────
 export const bets = pgTable("bets", {
-  id:         serial("id").primaryKey(),
-  userId:     integer("user_id").notNull().references(() => users.id),
-  matchId:    integer("match_id").notNull().references(() => matches.id),
-  amount:     decimal("amount",  { precision: 15, scale: 2 }).notNull(),
-  status:     text("status").notNull().default("pending"), // pending|won|refunded
-  profit:     decimal("profit",  { precision: 15, scale: 2 }),
-  placedAt:   timestamp("placed_at").notNull().defaultNow(),
-  settledAt:  timestamp("settled_at"),
+  id:          serial("id").primaryKey(),
+  userId:      integer("user_id").notNull().references(() => users.id),
+  matchId:     integer("match_id").notNull().references(() => matches.id),
+  amount:      decimal("amount",  { precision: 15, scale: 2 }).notNull(),
+  status:      text("status").notNull().default("pending"), // pending|won|refunded
+  profit:      decimal("profit",  { precision: 15, scale: 2 }),
+  chosenScore: text("chosen_score"),   // score sélectionné par l'utilisateur
+  placedAt:    timestamp("placed_at").notNull().defaultNow(),
+  settledAt:   timestamp("settled_at"),
 });
 
 export type Match    = typeof matches.$inferSelect;
