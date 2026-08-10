@@ -98,6 +98,21 @@ if (!sessionSecret) {
 }
 
 /** Log the real error server-side, return a generic message to the client */
+/**
+ * Parse a matchDate string from the admin frontend as UTC.
+ * The datetime-local input sends "YYYY-MM-DDTHH:mm" without a timezone suffix.
+ * Without "Z", Node.js treats it as SERVER LOCAL TIME, causing a shift when
+ * the server is not in UTC. We always append "Z" to force UTC interpretation.
+ */
+function parseMatchDateUTC(value: string | Date): Date {
+  if (value instanceof Date) return value;
+  const s = String(value).trim();
+  // Already has timezone info → parse as-is
+  if (s.endsWith("Z") || s.includes("+") || /[+-]\d\d:\d\d$/.test(s)) return new Date(s);
+  // No timezone → assume UTC
+  return new Date(s + "Z");
+}
+
 function serverError(res: Response, e: any, label = ""): void {
   console.error(`[serverError${label ? " " + label : ""}]`, e?.message || e);
   res.status(500).json({ message: "Erreur serveur" });
@@ -3598,7 +3613,7 @@ export async function registerRoutes(
         awayFlag:  awayFlag  || "🏴",
         predictedScore,
         profitRate: String(profitRate),
-        matchDate:  new Date(matchDate),
+        matchDate:  parseMatchDateUTC(matchDate),
         minBet:     parseInt(minBet)  || 1500,
         maxBet:     parseInt(maxBet)  || 6000000,
         league:     league || "",
@@ -3615,7 +3630,7 @@ export async function registerRoutes(
     try {
       const id = parseInt(req.params.id);
       const updates = req.body;
-      if (updates.matchDate) updates.matchDate = new Date(updates.matchDate);
+      if (updates.matchDate) updates.matchDate = parseMatchDateUTC(updates.matchDate);
       if (updates.profitRate) updates.profitRate = String(updates.profitRate);
       const [updated] = await db.update(matches).set(updates).where(eqOp(matches.id, id)).returning();
       if (!updated) return res.status(404).json({ message: "Match introuvable" });
