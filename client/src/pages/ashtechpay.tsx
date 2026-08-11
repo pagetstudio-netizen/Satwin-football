@@ -213,7 +213,7 @@ export default function AshtechPayPage() {
     mutationFn: async () => {
       if (!selectedOp || !phone.trim() || !otp.trim() || !reference) throw new Error("Données manquantes");
       const res = await apiRequest("POST", "/api/ashtechpay/collect", {
-        amount, country, phone, operator: selectedOp, otp, reference,
+        amount, country, phone, operator: selectedOp, otp: otp.trim(), reference,
       });
       return res.json();
     },
@@ -222,7 +222,18 @@ export default function AshtechPayPage() {
       setPolling(true);
       setStep("waiting");
     },
-    onError: (e: any) => toast({ title: "Erreur OTP", description: e.message, variant: "destructive" }),
+    onError: (e: any) => {
+      const msg: string = e.message || "";
+      // L'API demande de relancer sans OTP pour créer une nouvelle session
+      if (msg.toLowerCase().includes("expir") || msg.toLowerCase().includes("introuvable") || msg.toLowerCase().includes("session otp")) {
+        toast({ title: "Code OTP expiré", description: "Un nouveau code va être envoyé sur votre téléphone.", variant: "destructive" });
+        setOtp("");
+        // Relancer la session OTP sans le champ otp
+        collectMut.mutate(undefined);
+      } else {
+        toast({ title: "Erreur OTP", description: msg, variant: "destructive" });
+      }
+    },
   });
 
   if (!user || !amount) return null;
@@ -344,7 +355,7 @@ export default function AshtechPayPage() {
         <p style={{ fontSize: 13, color: "#444", marginBottom: 8 }}>Entrez le code OTP reçu :</p>
         <input type="text" inputMode="numeric" value={otp} onChange={e => setOtp(e.target.value)} placeholder="Code OTP"
           style={{ width: "100%", border: "1px solid #D8D8D8", borderRadius: 7, padding: "13px 14px", fontSize: 18, outline: "none", letterSpacing: 4, textAlign: "center", boxSizing: "border-box" }} />
-        <div style={{ display: "flex", gap: 12, marginTop: 28 }}>
+        <div style={{ display: "flex", gap: 12, marginTop: 20 }}>
           <button onClick={() => setStep("phone")}
             style={{ flex: 1, padding: "14px 0", borderRadius: 8, background: BTN_BACK, color: "#fff", border: "none", cursor: "pointer", fontWeight: 600, fontSize: 14 }}>
             ‹ Retour
@@ -355,6 +366,12 @@ export default function AshtechPayPage() {
             {otpMut.isPending ? "Validation..." : "Valider ›"}
           </button>
         </div>
+        <button
+          onClick={() => { setOtp(""); collectMut.mutate(undefined); }}
+          disabled={collectMut.isPending}
+          style={{ width: "100%", marginTop: 12, padding: "11px 0", borderRadius: 8, background: "transparent", color: "#1565C0", border: "1px solid #1565C0", cursor: "pointer", fontWeight: 600, fontSize: 13, opacity: collectMut.isPending ? 0.6 : 1 }}>
+          {collectMut.isPending ? "Envoi en cours..." : "🔄 Renvoyer un nouveau code OTP"}
+        </button>
       </div>
     </div>
   );
@@ -373,7 +390,7 @@ export default function AshtechPayPage() {
         <p style={{ fontSize: 13, color: "#444", marginBottom: 8 }}>Entrez le code OTP reçu par SMS :</p>
         <input type="text" inputMode="numeric" value={otp} onChange={e => setOtp(e.target.value)} placeholder="Code OTP"
           style={{ width: "100%", border: "1px solid #D8D8D8", borderRadius: 7, padding: "13px 14px", fontSize: 18, outline: "none", letterSpacing: 4, textAlign: "center", boxSizing: "border-box" }} />
-        <div style={{ display: "flex", gap: 12, marginTop: 28 }}>
+        <div style={{ display: "flex", gap: 12, marginTop: 20 }}>
           <button onClick={() => setStep("phone")}
             style={{ flex: 1, padding: "14px 0", borderRadius: 8, background: BTN_BACK, color: "#fff", border: "none", cursor: "pointer", fontWeight: 600, fontSize: 14 }}>
             ‹ Retour
@@ -384,6 +401,12 @@ export default function AshtechPayPage() {
             {otpMut.isPending ? "Validation..." : "Valider ›"}
           </button>
         </div>
+        <button
+          onClick={() => { setOtp(""); collectMut.mutate(undefined); }}
+          disabled={collectMut.isPending}
+          style={{ width: "100%", marginTop: 12, padding: "11px 0", borderRadius: 8, background: "transparent", color: "#1565C0", border: "1px solid #1565C0", cursor: "pointer", fontWeight: 600, fontSize: 13, opacity: collectMut.isPending ? 0.6 : 1 }}>
+          {collectMut.isPending ? "Envoi en cours..." : "🔄 Renvoyer un nouveau code OTP"}
+        </button>
       </div>
     </div>
   );
