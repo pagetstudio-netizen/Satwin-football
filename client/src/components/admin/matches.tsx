@@ -88,6 +88,12 @@ const STATUS_FILTERS = [
   { key: "cancelled", label: "Annulé" },
 ];
 
+function sameDay(a: Date, b: Date) {
+  return a.getFullYear() === b.getFullYear() &&
+         a.getMonth()    === b.getMonth()    &&
+         a.getDate()     === b.getDate();
+}
+
 /* ── Helpers ────────────────────────────────────────────────────────────────── */
 function fmtDate(d: string) {
   if (!d) return "—";
@@ -136,6 +142,7 @@ export default function AdminMatches() {
   /* ── Filter state ── */
   const [filterStatus,   setFilterStatus]   = useState<string>("all");
   const [filterFeatured, setFilterFeatured] = useState<boolean>(false);
+  const [filterDate,     setFilterDate]     = useState<"all"|"today"|"tomorrow"|"2days">("all");
   const [searchText,     setSearchText]     = useState<string>("");
 
   /* ── Data ── */
@@ -149,9 +156,18 @@ export default function AdminMatches() {
   });
 
   /* ── Filtered list ── */
+  const today    = new Date();
+  const tomorrow = new Date(today); tomorrow.setDate(today.getDate() + 1);
+
   const filteredList = matchList.filter(m => {
     if (filterStatus !== "all" && m.status !== filterStatus) return false;
     if (filterFeatured && !m.isFeatured) return false;
+    if (filterDate !== "all") {
+      const d = new Date(m.matchDate);
+      if (filterDate === "today"    && !sameDay(d, today))    return false;
+      if (filterDate === "tomorrow" && !sameDay(d, tomorrow)) return false;
+      if (filterDate === "2days"    && !sameDay(d, today) && !sameDay(d, tomorrow)) return false;
+    }
     if (searchText.trim()) {
       const q = searchText.toLowerCase();
       const haystack = `${m.homeTeam} ${m.awayTeam} ${m.league || ""}`.toLowerCase();
@@ -418,6 +434,33 @@ export default function AdminMatches() {
           <Star size={11} fill={filterFeatured ? "#fff" : "none"} />
           Match du jour uniquement
         </button>
+      </div>
+
+      {/* ── Filtre par date ─────────────────────────────────────────────────── */}
+      <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+        <span style={{ fontSize: 11, color: "#6B7280", fontWeight: 600 }}>📅 Date :</span>
+        {([
+          { key: "all",      label: "Toutes dates" },
+          { key: "2days",    label: "Aujourd'hui & Demain" },
+          { key: "today",    label: "Aujourd'hui" },
+          { key: "tomorrow", label: "Demain" },
+        ] as const).map(f => (
+          <button
+            key={f.key}
+            onClick={() => setFilterDate(f.key)}
+            style={{
+              padding: "4px 12px", borderRadius: 999, fontSize: 12, fontWeight: 600,
+              cursor: "pointer", border: "1px solid",
+              background: filterDate === f.key ? "#059669" : "#fff",
+              color:      filterDate === f.key ? "#fff"    : "#374151",
+              borderColor: filterDate === f.key ? "#059669" : "#D1D5DB",
+              transition: "all 0.15s",
+            }}
+          >
+            {f.label}
+            {f.key === "2days" && filterDate === f.key && ` (${filteredList.length})`}
+          </button>
+        ))}
       </div>
 
       {/* ── Match list ──────────────────────────────────────────────────────── */}
