@@ -578,8 +578,8 @@ export default function TeamPage() {
             })}
           </div>
 
-          {/* ── Tableau ── */}
-          <div style={{ margin: "12px 14px 20px", background: "white", borderRadius: 14, overflow: "hidden", boxShadow: "0 2px 12px rgba(0,0,0,0.06)" }}>
+          {/* ── Tableau dépôts semaine ── */}
+          <div style={{ margin: "12px 14px 0", background: "white", borderRadius: 14, overflow: "hidden", boxShadow: "0 2px 12px rgba(0,0,0,0.06)" }}>
             {/* En-tête colonnes */}
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 24px", padding: "11px 14px", background: "#fafafa", borderBottom: "1px solid #f0f0f0" }}>
               {["Date", "Volume valide", "Gain total"].map(h => (
@@ -628,6 +628,49 @@ export default function TeamPage() {
               </>
             )}
           </div>
+
+          {/* ── Historique des versements reçus ── */}
+          {(() => {
+            const primeHistory = (txList || []).filter(t => t.type === "prime_parrainage");
+            return (
+              <div style={{ margin: "18px 14px 24px" }}>
+                <p style={{ margin: "0 0 10px", fontWeight: 700, fontSize: 14, color: "#111827", display: "flex", alignItems: "center", gap: 6 }}>
+                  <Gift size={15} color="#15803d" />
+                  Historique des versements reçus
+                </p>
+                <div style={{ background: "white", borderRadius: 14, overflow: "hidden", boxShadow: "0 2px 12px rgba(0,0,0,0.06)" }}>
+                  {primeHistory.length === 0 ? (
+                    <div style={{ padding: "32px 16px", textAlign: "center" }}>
+                      <p style={{ color: "#9ca3af", fontSize: 14, margin: 0 }}>Aucun versement reçu pour l'instant</p>
+                    </div>
+                  ) : (
+                    primeHistory.map((tx, i) => {
+                      const d = new Date(tx.createdAt);
+                      const dateStr = `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())} ${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+                      const amount  = parseFloat(tx.amount);
+                      return (
+                        <div key={tx.id} style={{
+                          display: "flex", alignItems: "center", justifyContent: "space-between",
+                          padding: "14px 16px",
+                          borderBottom: i < primeHistory.length - 1 ? "1px solid #f3f4f6" : "none",
+                        }}>
+                          <div style={{ flex: 1 }}>
+                            <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: "#111827" }}>{dateStr}</p>
+                            {tx.description && (
+                              <p style={{ margin: "3px 0 0", fontSize: 11, color: "#9ca3af", lineHeight: 1.4 }}>{tx.description}</p>
+                            )}
+                          </div>
+                          <span style={{ fontWeight: 700, fontSize: 14, color: "#16a34a", marginLeft: 12 }}>
+                            +{fmt(amount)} {currency}
+                          </span>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+            );
+          })()}
 
         </div>
       </div>
