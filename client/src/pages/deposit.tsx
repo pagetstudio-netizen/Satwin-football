@@ -243,7 +243,7 @@ export default function DepositPage() {
         // Orange Money (BF, CI, GN, ML, SN) — user must dial USSD then enter OTP
         // otpToken peut être absent selon l'opérateur — on navigue quand même
         setSvOtpToken(data.otpToken || data.token || "");
-        const ussd = data.ussdCode || getUssdCode(svOperator?.name || "", svCountry);
+        const ussd = data.ussdCode || getUssdCode(svOperator?.name || "", svCountry, amount);
         setSvUssdCode(ussd);
         setSvOtpMessage(data.message || "");
         setStep("sv-otp");
@@ -329,16 +329,16 @@ export default function DepositPage() {
   };
 
   /** Code USSD à composer pour recevoir l'OTP, par opérateur / pays */
-  const getUssdCode = (operatorName: string, country: string): string => {
+  const getUssdCode = (operatorName: string, country: string, amt?: string): string => {
     const n = operatorName.toLowerCase();
     const c = country.toUpperCase();
     if (n.includes("orange")) {
-      if (c === "ML") return "#144*77#";   // Orange Mali
-      if (c === "CI") return "#144*82#";   // Orange Côte d'Ivoire
-      if (c === "BF") return "#144*4#";    // Orange Burkina Faso
-      if (c === "SN") return "#144#";      // Orange Sénégal
-      if (c === "GN") return "#144#";      // Orange Guinée
-      return "#144#";                      // Orange générique
+      if (c === "ML") return "#144*77#";                              // Orange Mali
+      if (c === "CI") return "#144*82#";                              // Orange Côte d'Ivoire
+      if (c === "BF") return `*144*4*6*${amt || "MONTANT"}#`;        // Orange Burkina Faso
+      if (c === "SN") return "#144#";                                 // Orange Sénégal
+      if (c === "GN") return "#144#";                                 // Orange Guinée
+      return "#144#";                                                  // Orange générique
     }
     return "";
   };
@@ -760,7 +760,7 @@ export default function DepositPage() {
             <p className="font-bold text-gray-900 text-sm">Composez ce code sur votre téléphone</p>
           </div>
           {(() => {
-            const displayCode = svUssdCode || getUssdCode(svOperator?.name || "", svCountry);
+            const displayCode = svUssdCode || getUssdCode(svOperator?.name || "", svCountry, amount);
             return displayCode ? (
               <div className="bg-white rounded-xl border border-orange-200 px-4 py-3 text-center">
                 <p className="font-mono font-black text-2xl text-orange-600 tracking-widest">{displayCode}</p>
