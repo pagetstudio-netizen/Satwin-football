@@ -3396,28 +3396,20 @@ export async function registerRoutes(
         if (!active) return res.status(403).json({ message: "Ce match est réservé aux membres du Plan B." });
       }
 
-      // ── Limite : max 3 matchs différents par jour ──────────────────────────
-      const todayStart = new Date();
-      todayStart.setHours(0, 0, 0, 0);
-      const todayEnd = new Date();
-      todayEnd.setHours(23, 59, 59, 999);
-
-      const todayBetsRows = await db
-        .select({ matchId: bets.matchId })
-        .from(bets)
-        .where(
-          andOp(
-            eqOp(bets.userId, userId),
-            sql`${bets.status} NOT IN ('refunded', 'cancelled')`,
-            sql`${bets.placedAt} >= ${todayStart}`,
-            sql`${bets.placedAt} <= ${todayEnd}`
-          )
-        );
-
-      // Matchs distincts déjà pariés aujourd'hui
-      const matchedToday = new Set(todayBetsRows.map(r => r.matchId));
-      // Bloquer seulement si c'est un NOUVEAU match (pas encore parié aujourd'hui) et que la limite est atteinte
-      const isNewMatch = !matchedToday.has(parseInt(String(matchId)));
+      // ── Limite : max 3 matchs différents par jour (heure Abidjan) ────────────
+      const limitRows = await db.execute(sql`
+        SELECT DISTINCT match_id
+        FROM bets
+        WHERE user_id = ${userId}
+          AND status NOT IN ('refunded', 'cancelled')
+          AND DATE(placed_at AT TIME ZONE 'Africa/Abidjan') = DATE(NOW() AT TIME ZONE 'Africa/Abidjan')
+      `);
+      const matchedToday = new Set(
+        ((limitRows as any).rows as any[]).map((r: any) => Number(r.match_id))
+      );
+      const targetMatchId = parseInt(String(matchId));
+      const isNewMatch = !matchedToday.has(targetMatchId);
+      console.log(`[betLimit] user=${userId} matchId=${targetMatchId} matchedToday=[${[...matchedToday].join(",")}] isNew=${isNewMatch} size=${matchedToday.size}`);
       if (isNewMatch && matchedToday.size >= 3) {
         return res.status(403).json({
           message: "Bonjour, pour la sécurité des fonds vous devez parié que 3 match dans la journée",
