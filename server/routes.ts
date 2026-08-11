@@ -1973,7 +1973,7 @@ export async function registerRoutes(
           FROM deposits d
           JOIN users u ON u.id = d.user_id
           WHERE u.referred_by = ${me.referralCode}
-            AND d.status = 'completed'
+            AND d.status = 'approved'
             AND d.created_at >= ${from.toISOString()}::timestamptz
             AND d.created_at <= ${to.toISOString()}::timestamptz
           GROUP BY 1
@@ -2931,7 +2931,7 @@ export async function registerRoutes(
         FROM users u
         JOIN users referred ON referred.referred_by = u.referral_code
         JOIN deposits d ON d.user_id = referred.id
-          AND d.status = 'completed'
+          AND d.status = 'approved'
           AND d.created_at >= ${monday.toISOString()}::timestamptz
           AND d.created_at <= ${sunday.toISOString()}::timestamptz
         GROUP BY u.id, u.full_name, u.phone, u.referral_code
@@ -2987,7 +2987,7 @@ export async function registerRoutes(
         FROM users u
         JOIN users referred ON referred.referred_by = u.referral_code
         JOIN deposits d ON d.user_id = referred.id
-          AND d.status = 'completed'
+          AND d.status = 'approved'
           AND d.created_at >= ${monday.toISOString()}::timestamptz
           AND d.created_at <= ${sunday.toISOString()}::timestamptz
         GROUP BY u.id
