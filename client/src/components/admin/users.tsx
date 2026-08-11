@@ -46,6 +46,7 @@ interface TeamMember {
   hasDeposited: boolean;
   createdAt: string;
   totalInvested: number;
+  totalDeposits: number;
   products: { productName: string; productPrice: number; isActive: boolean }[];
 }
 
@@ -63,36 +64,49 @@ function TeamMemberCard({ member }: { member: TeamMember; level: number }) {
     <Card className="mb-2">
       <CardContent className="p-3">
         <div className="flex items-start justify-between">
-          <div>
+          <div className="flex-1 min-w-0">
             <p className="font-medium text-foreground">{member.fullName}</p>
-            <p className="text-xs text-muted-foreground">{member.phone} - {member.country}</p>
-            <p className="text-xs text-muted-foreground">Inscrit: {new Date(member.createdAt).toLocaleDateString()}</p>
+            <p className="text-xs text-muted-foreground">{member.phone} · {member.country}</p>
+            <p className="text-xs text-muted-foreground">Inscrit: {new Date(member.createdAt).toLocaleDateString("fr-FR")}</p>
           </div>
-          <div className="text-right">
+          <div className="text-right flex flex-col items-end gap-1 ml-2">
             {member.hasActiveProduct && (
-              <Badge className="text-xs mb-1">Actif</Badge>
+              <Badge className="text-xs">Actif</Badge>
             )}
-            {member.hasDeposited && (
-              <Badge variant="secondary" className="text-xs mb-1 ml-1">A depose</Badge>
+            {member.hasDeposited || member.totalDeposits > 0 ? (
+              <Badge variant="secondary" className="text-xs text-green-700 bg-green-50 border border-green-200">
+                ✓ Rechargé
+              </Badge>
+            ) : (
+              <Badge variant="outline" className="text-xs text-gray-400">
+                Pas rechargé
+              </Badge>
             )}
           </div>
         </div>
-        <div className="mt-2 pt-2 border-t">
-          <p className="text-sm font-medium text-primary">
-            Total investi: {member.totalInvested.toLocaleString()} F
-          </p>
-          {member.products.length > 0 && (
-            <div className="mt-1">
-              <p className="text-xs text-muted-foreground">Produits:</p>
-              {member.products.map((p, i) => (
-                <p key={i} className="text-xs">
-                  - {p.productName} ({p.productPrice.toLocaleString()} F)
-                  {p.isActive ? " (actif)" : " (termine)"}
-                </p>
-              ))}
-            </div>
-          )}
+        <div className="mt-2 pt-2 border-t grid grid-cols-2 gap-2">
+          <div>
+            <p className="text-xs text-muted-foreground">Total rechargé</p>
+            <p className={`text-sm font-semibold ${member.totalDeposits > 0 ? "text-green-700" : "text-gray-400"}`}>
+              {member.totalDeposits > 0 ? `${member.totalDeposits.toLocaleString("fr-FR")} F` : "—"}
+            </p>
+          </div>
+          <div>
+            <p className="text-xs text-muted-foreground">Total investi</p>
+            <p className="text-sm font-semibold text-primary">
+              {member.totalInvested > 0 ? `${member.totalInvested.toLocaleString("fr-FR")} F` : "—"}
+            </p>
+          </div>
         </div>
+        {member.products.length > 0 && (
+          <div className="mt-1">
+            {member.products.map((p, i) => (
+              <p key={i} className="text-xs text-muted-foreground">
+                · {p.productName} ({p.productPrice.toLocaleString()} F){p.isActive ? " ✓" : ""}
+              </p>
+            ))}
+          </div>
+        )}
       </CardContent>
     </Card>
   );
@@ -123,6 +137,8 @@ export default function AdminUsers({ isSuperAdmin }: AdminUsersProps) {
   const [selectedProduct, setSelectedProduct] = useState("");
   const [showTeamModal, setShowTeamModal] = useState(false);
   const [teamUserId, setTeamUserId] = useState<number | null>(null);
+  const [teamUserName, setTeamUserName] = useState<string>("");
+  const [teamSearch, setTeamSearch] = useState("");
   const [adminPinInput, setAdminPinInput] = useState("");
 
   // Debounce search input
@@ -246,8 +262,10 @@ export default function AdminUsers({ isSuperAdmin }: AdminUsersProps) {
     return true;
   });
 
-  const openTeamModal = (userId: number) => {
+  const openTeamModal = (userId: number, userName: string) => {
     setTeamUserId(userId);
+    setTeamUserName(userName);
+    setTeamSearch("");
     setShowTeamModal(true);
   };
 
@@ -320,7 +338,7 @@ export default function AdminUsers({ isSuperAdmin }: AdminUsersProps) {
                     )}
                   </div>
                   <div className="flex gap-1">
-                    <Button size="sm" variant="outline" onClick={() => navigate(`/admin/team/${user.id}`)}>
+                    <Button size="sm" variant="outline" onClick={() => openTeamModal(user.id, user.fullName)}>
                       <Users className="w-4 h-4 mr-1" />
                       Equipe
                     </Button>
@@ -424,85 +442,107 @@ export default function AdminUsers({ isSuperAdmin }: AdminUsersProps) {
         </div>
       )}
 
-      <Dialog open={showTeamModal} onOpenChange={() => { setShowTeamModal(false); setTeamUserId(null); }}>
+      <Dialog open={showTeamModal} onOpenChange={() => { setShowTeamModal(false); setTeamUserId(null); setTeamSearch(""); }}>
         <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Equipe de l'utilisateur</DialogTitle>
+            <DialogTitle className="flex items-center gap-2">
+              <Users className="w-5 h-5" />
+              Équipe de {teamUserName}
+            </DialogTitle>
           </DialogHeader>
+
+          {/* Barre de recherche */}
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <Input
+              placeholder="Filtrer par nom, téléphone ou montant..."
+              value={teamSearch}
+              onChange={e => setTeamSearch(e.target.value)}
+              className="pl-10"
+            />
+          </div>
 
           {teamLoading ? (
             <div className="flex justify-center py-8">
               <Loader2 className="w-8 h-8 animate-spin" />
             </div>
-          ) : teamData ? (
-            <Tabs defaultValue="level1" className="w-full">
-              <TabsList className="grid w-full grid-cols-3">
-                <TabsTrigger value="level1">
-                  Niveau 1 ({teamData.level1.length})
-                </TabsTrigger>
-                <TabsTrigger value="level2">
-                  Niveau 2 ({teamData.level2.length})
-                </TabsTrigger>
-                <TabsTrigger value="level3">
-                  Niveau 3 ({teamData.level3.length})
-                </TabsTrigger>
-              </TabsList>
+          ) : teamData ? (() => {
+            const q = teamSearch.trim().toLowerCase();
+            const filterMembers = (list: TeamMember[]) =>
+              q
+                ? list.filter(m => {
+                    const nameMatch = m.fullName.toLowerCase().includes(q);
+                    const phoneMatch = m.phone.toLowerCase().includes(q);
+                    const amountMatch = q.replace(/\s/g, "") !== "" &&
+                      !isNaN(Number(q.replace(/\s/g, ""))) &&
+                      m.totalDeposits >= Number(q.replace(/\s/g, ""));
+                    return nameMatch || phoneMatch || amountMatch;
+                  })
+                : list;
 
-              <TabsContent value="level1" className="mt-4">
-                <Card className="mb-3">
-                  <CardContent className="p-3 text-center">
-                    <p className="text-lg font-bold text-primary">
-                      {teamData.totalLevel1Invested.toLocaleString()} F
-                    </p>
-                    <p className="text-xs text-muted-foreground">Total investi niveau 1</p>
-                  </CardContent>
-                </Card>
-                {teamData.level1.length > 0 ? (
-                  teamData.level1.map(member => (
-                    <TeamMemberCard key={member.id} member={member} level={1} />
-                  ))
-                ) : (
-                  <p className="text-center text-muted-foreground py-4">Aucun filleul niveau 1</p>
-                )}
-              </TabsContent>
+            const l1 = filterMembers(teamData.level1);
+            const l2 = filterMembers(teamData.level2);
+            const l3 = filterMembers(teamData.level3);
 
-              <TabsContent value="level2" className="mt-4">
-                <Card className="mb-3">
-                  <CardContent className="p-3 text-center">
-                    <p className="text-lg font-bold text-primary">
-                      {teamData.totalLevel2Invested.toLocaleString()} F
-                    </p>
-                    <p className="text-xs text-muted-foreground">Total investi niveau 2</p>
-                  </CardContent>
-                </Card>
-                {teamData.level2.length > 0 ? (
-                  teamData.level2.map(member => (
-                    <TeamMemberCard key={member.id} member={member} level={2} />
-                  ))
-                ) : (
-                  <p className="text-center text-muted-foreground py-4">Aucun filleul niveau 2</p>
-                )}
-              </TabsContent>
+            const LevelSummary = ({ members, level }: { members: TeamMember[]; level: number }) => {
+              const totalDep = members.reduce((s, m) => s + m.totalDeposits, 0);
+              const totalInv = members.reduce((s, m) => s + m.totalInvested, 0);
+              const recharged = members.filter(m => m.totalDeposits > 0).length;
+              return (
+                <div className="grid grid-cols-3 gap-2 mb-3">
+                  <Card>
+                    <CardContent className="p-2 text-center">
+                      <p className="text-xs text-muted-foreground">Filleuls N{level}</p>
+                      <p className="text-base font-bold">{members.length}</p>
+                    </CardContent>
+                  </Card>
+                  <Card>
+                    <CardContent className="p-2 text-center">
+                      <p className="text-xs text-muted-foreground">Ont rechargé</p>
+                      <p className="text-base font-bold text-green-700">{recharged}</p>
+                    </CardContent>
+                  </Card>
+                  <Card>
+                    <CardContent className="p-2 text-center">
+                      <p className="text-xs text-muted-foreground">Total dépôts</p>
+                      <p className="text-sm font-bold text-green-700">{totalDep.toLocaleString("fr-FR")} F</p>
+                    </CardContent>
+                  </Card>
+                </div>
+              );
+            };
 
-              <TabsContent value="level3" className="mt-4">
-                <Card className="mb-3">
-                  <CardContent className="p-3 text-center">
-                    <p className="text-lg font-bold text-primary">
-                      {teamData.totalLevel3Invested.toLocaleString()} F
-                    </p>
-                    <p className="text-xs text-muted-foreground">Total investi niveau 3</p>
-                  </CardContent>
-                </Card>
-                {teamData.level3.length > 0 ? (
-                  teamData.level3.map(member => (
-                    <TeamMemberCard key={member.id} member={member} level={3} />
-                  ))
-                ) : (
-                  <p className="text-center text-muted-foreground py-4">Aucun filleul niveau 3</p>
-                )}
-              </TabsContent>
-            </Tabs>
-          ) : null}
+            return (
+              <Tabs defaultValue="level1" className="w-full">
+                <TabsList className="grid w-full grid-cols-3">
+                  <TabsTrigger value="level1">N1 ({l1.length})</TabsTrigger>
+                  <TabsTrigger value="level2">N2 ({l2.length})</TabsTrigger>
+                  <TabsTrigger value="level3">N3 ({l3.length})</TabsTrigger>
+                </TabsList>
+
+                <TabsContent value="level1" className="mt-3">
+                  <LevelSummary members={l1} level={1} />
+                  {l1.length > 0
+                    ? l1.map(m => <TeamMemberCard key={m.id} member={m} level={1} />)
+                    : <p className="text-center text-muted-foreground py-4">Aucun filleul{q ? " correspondant" : " niveau 1"}</p>}
+                </TabsContent>
+
+                <TabsContent value="level2" className="mt-3">
+                  <LevelSummary members={l2} level={2} />
+                  {l2.length > 0
+                    ? l2.map(m => <TeamMemberCard key={m.id} member={m} level={2} />)
+                    : <p className="text-center text-muted-foreground py-4">Aucun filleul{q ? " correspondant" : " niveau 2"}</p>}
+                </TabsContent>
+
+                <TabsContent value="level3" className="mt-3">
+                  <LevelSummary members={l3} level={3} />
+                  {l3.length > 0
+                    ? l3.map(m => <TeamMemberCard key={m.id} member={m} level={3} />)
+                    : <p className="text-center text-muted-foreground py-4">Aucun filleul{q ? " correspondant" : " niveau 3"}</p>}
+                </TabsContent>
+              </Tabs>
+            );
+          })() : null}
         </DialogContent>
       </Dialog>
 

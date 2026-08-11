@@ -889,6 +889,12 @@ export class DatabaseStorage implements IStorage {
         .filter(p => !p.isActive || p.isActive)
         .reduce((sum, p) => sum + p.productPrice, 0);
 
+      // Total des dépôts approuvés
+      const depositRows = await db.select({ amount: deposits.amount })
+        .from(deposits)
+        .where(and(eq(deposits.userId, user.id), eq(deposits.status, "approved")));
+      const totalDeposits = depositRows.reduce((sum, d) => sum + parseFloat(d.amount), 0);
+
       return {
         id: user.id,
         fullName: user.fullName,
@@ -899,6 +905,7 @@ export class DatabaseStorage implements IStorage {
         hasDeposited: user.hasDeposited,
         createdAt: user.createdAt,
         totalInvested,
+        totalDeposits,
         products: userProductsList,
       };
     };

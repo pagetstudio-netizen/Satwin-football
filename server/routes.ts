@@ -3396,6 +3396,34 @@ export async function registerRoutes(
         if (!active) return res.status(403).json({ message: "Ce match est réservé aux membres du Plan B." });
       }
 
+      // ── Limite : max 3 matchs différents par jour ──────────────────────────
+      const todayStart = new Date();
+      todayStart.setHours(0, 0, 0, 0);
+      const todayEnd = new Date();
+      todayEnd.setHours(23, 59, 59, 999);
+
+      const todayBetsRows = await db
+        .select({ matchId: bets.matchId })
+        .from(bets)
+        .where(
+          andOp(
+            eqOp(bets.userId, userId),
+            sql`${bets.status} NOT IN ('refunded', 'cancelled')`,
+            sql`${bets.placedAt} >= ${todayStart}`,
+            sql`${bets.placedAt} <= ${todayEnd}`
+          )
+        );
+
+      // Matchs distincts déjà pariés aujourd'hui
+      const matchedToday = new Set(todayBetsRows.map(r => r.matchId));
+      // Bloquer seulement si c'est un NOUVEAU match (pas encore parié aujourd'hui) et que la limite est atteinte
+      const isNewMatch = !matchedToday.has(parseInt(String(matchId)));
+      if (isNewMatch && matchedToday.size >= 3) {
+        return res.status(403).json({
+          message: "Bonjour, pour la sécurité des fonds vous devez parié que 3 match dans la journée",
+        });
+      }
+
       const user = await storage.getUser(userId);
       if (!user) return res.status(404).json({ message: "Utilisateur introuvable" });
       if (parseFloat(user.balance) < betAmount) return res.status(400).json({ message: "Solde insuffisant" });
@@ -3525,45 +3553,61 @@ export async function registerRoutes(
     }
   });
 
+  /* ── Créneaux horaires de sélection des matchs (heure Abidjan = UTC+0) ──── */
+  // Matin 08h-12h : 10 matchs · Soirée 18h-20h : 20 matchs · Nuit 22h-00h : 10 matchs
+  const SYNC_SLOTS = [
+    { name: "matin",   minH:  8, maxH: 12, limit: 10 },
+    { name: "soirée",  minH: 18, maxH: 20, limit: 20 },
+    { name: "nuit",    minH: 22, maxH: 24, limit: 10 },
+  ] as const;
+  const MAX_PER_DAY = 40;
+
+  function fixtureSlot(date: Date): number {
+    const h = date.getUTCHours(); // Abidjan = UTC+0
+    return SYNC_SLOTS.findIndex(s => h >= s.minH && h < s.maxH);
+  }
+
+  async function selectBySlots(allFixtures: Awaited<ReturnType<typeof fetchUpcomingFixtures>>) {
+    const byDay = new Map<string, typeof allFixtures>();
+    for (const f of allFixtures) {
+      if (!f.externalId) continue;
+      const day = new Date(f.matchDate).toISOString().slice(0, 10);
+      if (!byDay.has(day)) byDay.set(day, []);
+      byDay.get(day)!.push(f);
+    }
+
+    const selected: typeof allFixtures = [];
+    for (const [day, dayFixtures] of byDay) {
+      for (let si = 0; si < SYNC_SLOTS.length; si++) {
+        const slot = SYNC_SLOTS[si];
+        // Existants en DB pour ce créneau ce jour-là
+        const existRows = await db.execute(sql`
+          SELECT COUNT(*) AS cnt FROM matches
+          WHERE DATE(match_date AT TIME ZONE 'Africa/Abidjan') = ${day}::date
+            AND EXTRACT(HOUR FROM match_date AT TIME ZONE 'Africa/Abidjan') >= ${slot.minH}
+            AND EXTRACT(HOUR FROM match_date AT TIME ZONE 'Africa/Abidjan') < ${slot.maxH}
+        `) as any;
+        const existing = parseInt((existRows?.rows?.[0] ?? existRows?.[0])?.cnt ?? "0");
+        const canAdd = Math.max(0, slot.limit - existing);
+        if (canAdd === 0) continue;
+
+        const slotFixtures = dayFixtures
+          .filter(f => fixtureSlot(new Date(f.matchDate)) === si)
+          .sort((a, b) => new Date(a.matchDate).getTime() - new Date(b.matchDate).getTime());
+
+        selected.push(...slotFixtures.slice(0, canAdd));
+      }
+    }
+    return selected;
+  }
+
   /* ── API-Football sync: import upcoming fixtures ─────────────────────────── */
   app.post("/api/admin/matches/sync", requireAdmin, async (req, res) => {
     try {
       const days = Math.min(parseInt(req.body?.days) || 2, 7);
-      const MAX_PER_DAY = 20;
 
       const allFixtures = await fetchUpcomingFixtures(days);
-
-      // ── Limiter à MAX_PER_DAY par jour, priorité matchs soirée (18h-23h59) ──
-      const byDay = new Map<string, typeof allFixtures>();
-      for (const f of allFixtures) {
-        if (!f.externalId) continue;
-        const day = new Date(f.matchDate).toISOString().slice(0, 10);
-        if (!byDay.has(day)) byDay.set(day, []);
-        byDay.get(day)!.push(f);
-      }
-
-      const selected: typeof allFixtures = [];
-      for (const [day, dayFixtures] of byDay) {
-        // Combien de matchs existent déjà en DB pour ce jour ?
-        const existingRows = await db.execute(
-          sql`SELECT COUNT(*) AS cnt FROM matches WHERE DATE(match_date AT TIME ZONE 'Africa/Abidjan') = ${day}::date`
-        ) as any;
-        const existing = parseInt((existingRows?.rows?.[0] ?? existingRows?.[0])?.cnt ?? "0");
-        const canAdd = Math.max(0, MAX_PER_DAY - existing);
-        if (canAdd === 0) continue;
-
-        // Priorité soirée : 18h-23h59 (UTC = heure Abidjan UTC+0) en premier
-        const sorted = [...dayFixtures].sort((a, b) => {
-          const hA = new Date(a.matchDate).getUTCHours();
-          const hB = new Date(b.matchDate).getUTCHours();
-          const evA = hA >= 18 && hA <= 23 ? 0 : 1;
-          const evB = hB >= 18 && hB <= 23 ? 0 : 1;
-          if (evA !== evB) return evA - evB;
-          return hA - hB;
-        });
-
-        selected.push(...sorted.slice(0, canAdd));
-      }
+      const selected = await selectBySlots(allFixtures);
 
       let imported = 0;
       let skipped  = 0;
@@ -3590,10 +3634,10 @@ export async function registerRoutes(
       }
 
       await storage.logAdminAction(req.session.userId!, "sync_matches", null,
-        `Sync API-Football (max ${MAX_PER_DAY}/jour soirée): ${imported} importé(s), ${skipped} ignoré(s)`);
+        `Sync API-Football (max ${MAX_PER_DAY}/jour · 8h-12h:10 · 18h-20h:20 · 22h-00h:10): ${imported} importé(s), ${skipped} ignoré(s)`);
 
       res.json({
-        message: `${imported} match(s) importé(s), ${skipped} ignoré(s) · max ${MAX_PER_DAY}/jour, priorité soirée 18h-23h`,
+        message: `${imported} match(s) importé(s), ${skipped} ignoré(s) · max ${MAX_PER_DAY}/jour (8h-12h:10 · 18h-20h:20 · 22h-00h:10)`,
         imported, skipped, total: selected.length,
       });
     } catch (e: any) {
@@ -4212,37 +4256,8 @@ export async function registerRoutes(
   async function runMidnightSync() {
     try {
       console.log("[midnightSync] Début de la synchronisation automatique…");
-      const MAX_PER_DAY = 20;
       const allFixtures = await fetchUpcomingFixtures(2); // aujourd'hui + demain
-
-      // Grouper par jour, priorité soirée (18h-23h), max 20/jour
-      const byDay = new Map<string, typeof allFixtures>();
-      for (const f of allFixtures) {
-        if (!f.externalId) continue;
-        const day = new Date(f.matchDate).toISOString().slice(0, 10);
-        if (!byDay.has(day)) byDay.set(day, []);
-        byDay.get(day)!.push(f);
-      }
-
-      const selected: typeof allFixtures = [];
-      for (const [day, dayFixtures] of byDay) {
-        const existingRows = await db.execute(
-          sql`SELECT COUNT(*) AS cnt FROM matches WHERE DATE(match_date AT TIME ZONE 'Africa/Abidjan') = ${day}::date`
-        ) as any;
-        const existing = parseInt((existingRows?.rows?.[0] ?? existingRows?.[0])?.cnt ?? "0");
-        const canAdd = Math.max(0, MAX_PER_DAY - existing);
-        if (canAdd === 0) continue;
-
-        const sorted = [...dayFixtures].sort((a, b) => {
-          const hA = new Date(a.matchDate).getUTCHours();
-          const hB = new Date(b.matchDate).getUTCHours();
-          const evA = hA >= 18 && hA <= 23 ? 0 : 1;
-          const evB = hB >= 18 && hB <= 23 ? 0 : 1;
-          if (evA !== evB) return evA - evB;
-          return hA - hB;
-        });
-        selected.push(...sorted.slice(0, canAdd));
-      }
+      const selected = await selectBySlots(allFixtures);
 
       let imported = 0, skipped = 0;
       for (const f of selected) {
@@ -4264,7 +4279,7 @@ export async function registerRoutes(
         });
         imported++;
       }
-      console.log(`[midnightSync] Terminé: ${imported} importé(s), ${skipped} ignoré(s) (max ${MAX_PER_DAY}/jour, priorité soirée)`);
+      console.log(`[midnightSync] Terminé: ${imported} importé(s), ${skipped} ignoré(s) (max ${MAX_PER_DAY}/jour · 8h-12h:10 · 18h-20h:20 · 22h-00h:10)`);
     } catch (e) {
       console.error("[midnightSync] Erreur:", e);
     }
