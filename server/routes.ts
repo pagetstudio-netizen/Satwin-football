@@ -3316,13 +3316,16 @@ export async function registerRoutes(
   app.get("/api/matches", async (req, res) => {
     try {
       const { sql: rawSql } = await import("drizzle-orm");
-      const cutoff = new Date(Date.now() - 3 * 60 * 60 * 1000);
+      // Afficher uniquement les matchs d'aujourd'hui et des jours suivants
+      // Abidjan = UTC+0 → minuit Abidjan = minuit UTC
+      const todayStart = new Date();
+      todayStart.setUTCHours(0, 0, 0, 0);
       const rows = await db.select().from(matches)
         .where(
           andOp(
             eqOp(matches.isActive, true),
             rawSql`${matches.status} NOT IN ('finished','cancelled')`,
-            rawSql`${matches.matchDate} >= ${cutoff}`
+            rawSql`${matches.matchDate} >= ${todayStart}`
           )
         )
         .orderBy(ascOp(matches.matchDate));
