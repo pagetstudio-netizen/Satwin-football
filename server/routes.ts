@@ -3993,6 +3993,7 @@ export async function registerRoutes(
           status:         matches.status,
           is_featured:    matches.isFeatured,
           is_vip_only:    (matches as any).isVipOnly,
+          match_date:     matches.matchDate,
         })
         .from(matches)
         .where(andOp(eqOp(matches.isActive, true), inArray(matches.externalId, relevantIds)))
@@ -4004,7 +4005,10 @@ export async function registerRoutes(
 
         const scoreStr = liveScoreStr(fixture);
 
-        if (isFinished(fixture.statusShort) && row.status !== "finished") {
+        // Garde de sécurité : ne jamais régler un match encore dans le futur
+        // (protection contre les dates stockées incorrectement)
+        const matchDateMs = row.match_date ? new Date(row.match_date).getTime() : 0;
+        if (isFinished(fixture.statusShort) && row.status !== "finished" && matchDateMs <= Date.now()) {
           // ── PARIS RENVERSÉ auto-settle ──────────────────────────────────────
           // Score réel ≠ prédit → tous GAGNENT
           // Score réel = prédit :
