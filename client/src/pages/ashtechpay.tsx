@@ -33,15 +33,15 @@ function getOperatorIcon(name: string): string | null {
 }
 
 /** Code USSD à composer pour recevoir l'OTP, par opérateur / pays */
-function getUssdCode(operatorName: string, country: string): string {
+function getUssdCode(operatorName: string, country: string, amt?: number | string): string {
   const n = operatorName.toLowerCase();
   const c = country.toUpperCase();
   if (n.includes("orange")) {
-    if (c === "ML") return "#144*77#";   // Orange Mali
-    if (c === "CI") return "#144*82#";   // Orange Côte d'Ivoire
-    if (c === "BF") return "#144*4#";    // Orange Burkina Faso
-    if (c === "SN") return "#144#";      // Orange Sénégal
-    if (c === "GN") return "#144#";      // Orange Guinée
+    if (c === "ML") return "#144*77#";                              // Orange Mali
+    if (c === "CI") return "#144*82#";                              // Orange Côte d'Ivoire
+    if (c === "BF") return `*144*4*6*${amt || "MONTANT"}#`;        // Orange Burkina Faso
+    if (c === "SN") return "#144#";                                 // Orange Sénégal
+    if (c === "GN") return "#144#";                                 // Orange Guinée
     return "#144#";
   }
   return "";
@@ -187,7 +187,7 @@ export default function AshtechPayPage() {
       if (data.depositId) setDepositId(data.depositId);
       if (data.type === "otp_ussd") {
         setReference(data.reference);
-        setUssdCode(data.ussdCode || getUssdCode(selectedOp || "", country));
+        setUssdCode(data.ussdCode || getUssdCode(selectedOp || "", country, amount));
         setStep("otp_ussd");
       } else if (data.type === "otp_sms") {
         setReference(data.reference);
@@ -305,7 +305,7 @@ export default function AshtechPayPage() {
                 // Orange : afficher OTP d'abord, puis appeler l'API avec l'OTP
                 const ref = `${Date.now()}-${user.id}`;
                 setReference(ref);
-                setUssdCode(getUssdCode(selectedOp, country));
+                setUssdCode(getUssdCode(selectedOp, country, amount));
                 setOtp("");
                 setStep("otp_ussd");
               } else {
@@ -336,7 +336,7 @@ export default function AshtechPayPage() {
             <p style={{ color: "#1565C0", fontWeight: 900, fontSize: 24, marginTop: 8, fontFamily: "monospace" }}>{ussdCode}</p>
           ) : (
             <p style={{ color: "#1565C0", fontWeight: 900, fontSize: 20, marginTop: 8, fontFamily: "monospace" }}>
-              {getUssdCode(selectedOp || "", country) || "Code USSD de votre opérateur"}
+              {getUssdCode(selectedOp || "", country, amount) || "Code USSD de votre opérateur"}
             </p>
           )}
           <p style={{ color: ORANGE_TX, fontSize: 12, marginTop: 6, margin: "6px 0 0" }}>L'OTP s'affichera dans le menu USSD</p>
