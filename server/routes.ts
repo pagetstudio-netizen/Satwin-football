@@ -1945,19 +1945,24 @@ export async function registerRoutes(
       const me = await storage.getUser(req.session.userId!);
       if (!me) return res.status(401).json({ message: "Non authentifié" });
 
-      // Week boundaries (Monday 00:00 → Sunday 23:59)
+      // Week boundaries (Sunday 00:00 UTC → Saturday 23:59 UTC)
+      // Abidjan = UTC+0, calcul UTC pur pour être timezone-safe (Plesk UTC+2 compris)
       const now = new Date();
-      const dayOfWeek = now.getDay() === 0 ? 6 : now.getDay() - 1; // 0=Mon … 6=Sun
-      const thisMonday = new Date(now);
-      thisMonday.setDate(now.getDate() - dayOfWeek);
-      thisMonday.setHours(0, 0, 0, 0);
-      const thisSunday = new Date(thisMonday);
-      thisSunday.setDate(thisMonday.getDate() + 6);
-      thisSunday.setHours(23, 59, 59, 999);
-      const lastMonday = new Date(thisMonday);
-      lastMonday.setDate(thisMonday.getDate() - 7);
-      const lastSunday = new Date(thisSunday);
-      lastSunday.setDate(thisSunday.getDate() - 7);
+      const thisWeekStart = new Date(now);
+      thisWeekStart.setUTCDate(now.getUTCDate() - now.getUTCDay()); // reculer au dimanche
+      thisWeekStart.setUTCHours(0, 0, 0, 0);
+      const thisWeekEnd = new Date(thisWeekStart);
+      thisWeekEnd.setUTCDate(thisWeekStart.getUTCDate() + 6); // samedi
+      thisWeekEnd.setUTCHours(23, 59, 59, 999);
+      const lastWeekStart = new Date(thisWeekStart);
+      lastWeekStart.setUTCDate(thisWeekStart.getUTCDate() - 7);
+      const lastWeekEnd = new Date(thisWeekEnd);
+      lastWeekEnd.setUTCDate(thisWeekEnd.getUTCDate() - 7);
+      // Aliases pour la query
+      const thisMonday = thisWeekStart;
+      const thisSunday = thisWeekEnd;
+      const lastMonday = lastWeekStart;
+      const lastSunday = lastWeekEnd;
 
       type DayRow = { day: string; volume: string };
 
@@ -2903,17 +2908,17 @@ export async function registerRoutes(
   // ── Prime de parrainage — aperçu et versement ────────────────────────────
   app.get("/api/admin/prime-preview", requireAdmin, async (req, res) => {
     try {
-      // Semaine en cours : lundi 00:00 → dimanche 23:59
+      // Semaine en cours : dimanche 00:00 UTC → samedi 23:59 UTC
+      // Abidjan = UTC+0 → calcul UTC pur, fonctionne aussi sur serveur UTC+2 (Plesk)
       const now = new Date();
-      const dayOfWeek = now.getDay() === 0 ? 6 : now.getDay() - 1;
       const monday = new Date(now);
-      monday.setDate(now.getDate() - dayOfWeek);
-      monday.setHours(0, 0, 0, 0);
+      monday.setUTCDate(now.getUTCDate() - now.getUTCDay()); // reculer au dimanche
+      monday.setUTCHours(0, 0, 0, 0);
       const sunday = new Date(monday);
-      sunday.setDate(monday.getDate() + 6);
-      sunday.setHours(23, 59, 59, 999);
+      sunday.setUTCDate(monday.getUTCDate() + 6); // samedi
+      sunday.setUTCHours(23, 59, 59, 999);
 
-      const isTuesday = now.getDay() === 2;
+      const isTuesday = now.getUTCDay() === 2;
 
       // Pour chaque parrain actif, calculer le total des dépôts de ses filleuls cette semaine
       const rows = await db.execute(sql`
@@ -2967,13 +2972,13 @@ export async function registerRoutes(
   app.post("/api/admin/pay-weekly-prime", requireAdmin, async (req, res) => {
     try {
       const now = new Date();
-      const dayOfWeek = now.getDay() === 0 ? 6 : now.getDay() - 1;
+      // Semaine : dimanche 00:00 UTC → samedi 23:59 UTC (Abidjan = UTC+0)
       const monday = new Date(now);
-      monday.setDate(now.getDate() - dayOfWeek);
-      monday.setHours(0, 0, 0, 0);
+      monday.setUTCDate(now.getUTCDate() - now.getUTCDay()); // dimanche
+      monday.setUTCHours(0, 0, 0, 0);
       const sunday = new Date(monday);
-      sunday.setDate(monday.getDate() + 6);
-      sunday.setHours(23, 59, 59, 999);
+      sunday.setUTCDate(monday.getUTCDate() + 6); // samedi
+      sunday.setUTCHours(23, 59, 59, 999);
 
       const rows = await db.execute(sql`
         SELECT
